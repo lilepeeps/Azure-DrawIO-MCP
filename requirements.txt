@@ -1,0 +1,11 @@
+# Azure Draw.io MCP Server - Dependencies
+# Inspired by dminkovski/azure-diagram-mcp
+
+# Draw.io diagram generation
+drawpyo>=0.2.5
+
+# MCP SDK for server implementation
+mcp[cli]>=1.11.0
+
+# Data validation
+pydantic>=2.10.6
