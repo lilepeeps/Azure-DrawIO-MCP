@@ -447,9 +447,6 @@ async def generate_drawio_diagram(
             if resource.group and resource.group in group_objects:
                 parent_group = group_objects[resource.group]
             
-            # Create the object - either on page or as child of group
-            obj = drawpyo_objects.Object(page=page)
-            
             # Get the resource number for labeling
             res_num = resource_index.get(resource.id, 0)
             
@@ -459,22 +456,37 @@ async def generate_drawio_diagram(
                 and AZURE_SHAPES[resource.resource_type][2] is not None
             )
             
+            # Create the object with parent set during construction for proper nesting
+            # When parent is set, positions become relative to parent's origin
+            if parent_group:
+                obj = drawpyo_objects.Object(
+                    page=page,
+                    parent=parent_group,
+                )
+            else:
+                obj = drawpyo_objects.Object(page=page)
+            
             if has_icon:
                 # For icons, show number and name below the icon
                 obj.value = f"<b style='color:#0078D4;'>[{res_num}]</b> {resource.name}"
-                obj.size = (ICON_SIZE, ICON_SIZE)
+                obj.width = ICON_SIZE
+                obj.height = ICON_SIZE
             else:
                 # For fallback shapes, show number, name and type inside
                 obj.value = f"<b>[{res_num}]</b> {resource.name}\n({display_name})"
-                obj.size = (DEFAULT_WIDTH, DEFAULT_HEIGHT)
+                obj.width = DEFAULT_WIDTH
+                obj.height = DEFAULT_HEIGHT
             
             x, y = positions[resource.id]
-            obj.position = (x, y)
-            obj.apply_style_string(style)
             
-            # Add as child of group to achieve proper nesting
+            # Use position_rel_to_parent for grouped items (coordinates are already relative)
+            # Use absolute position for ungrouped items
             if parent_group:
-                parent_group.add_object(obj)
+                obj.position_rel_to_parent = (x, y)
+            else:
+                obj.position = (x, y)
+            
+            obj.apply_style_string(style)
             
             objects[resource.id] = obj
         
