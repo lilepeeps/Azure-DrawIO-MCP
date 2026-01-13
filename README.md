@@ -48,6 +48,8 @@ Generate **editable** Azure architecture diagrams in Draw.io format using an MCP
 
 ## Quick Start
 
+This project includes a dev container that you can run to install all prerequisites to skip steps 1 and 2. 
+
 ### 1. Install Prerequisites
 
 **Python 3.10+** is required:
@@ -109,7 +111,7 @@ Add to your VS Code MCP configuration (`~/.vscode/mcp.json` or workspace setting
 
 ```json
 {
-  "mcpServers": {
+  "servers": {
     "Azure Draw.io MCP Server": {
       "type": "stdio",
       "command": "uvx",
@@ -129,7 +131,7 @@ Add to your VS Code MCP configuration (`~/.vscode/mcp.json` or workspace setting
 
 ```json
 {
-  "mcpServers": {
+  "servers": {
     "Azure Draw.io MCP Server": {
       "type": "stdio",
       "command": "python",
@@ -142,7 +144,7 @@ Add to your VS Code MCP configuration (`~/.vscode/mcp.json` or workspace setting
 }
 ```
 
-### 4. Generate Diagrams
+### 5. Generate Diagrams
 
 In VS Code with GitHub Copilot, use prompts like:
 
