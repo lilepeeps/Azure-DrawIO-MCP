@@ -1,0 +1,24 @@
+{
+	"name": "Azure Draw.io MCP Server",
+	"image": "mcr.microsoft.com/devcontainers/python:3.12",
+	
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"hediet.vscode-drawio"
+			]
+		}
+	},
+
+	"postCreateCommand": "pip install -r requirements.txt",
+
+	"features": {
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"installZsh": true,
+			"installOhMyZsh": true,
+			"upgradePackages": true
+		}
+	},
+
+	"remoteUser": "vscode"
+}
