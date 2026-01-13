@@ -48,13 +48,85 @@ Generate **editable** Azure architecture diagrams in Draw.io format using an MCP
 
 ## Quick Start
 
-This project includes a dev container that you can run to install all prerequisites to skip steps 1 and 2. 
+Choose one of three installation methods:
 
-### 1. Install Prerequisites
+> **💡 Tip:** This project includes a [dev container](.devcontainer/devcontainer.json) for instant setup - just open in VS Code and select "Reopen in Container".
 
-**Python 3.10+** is required:
+### Option A: Docker (Recommended for Multi-Project Use) 🐳
 
-```powershell
+**1. Install Prerequisites:**
+- Docker Desktop ([Windows/Mac](https://www.docker.com/products/docker-desktop/) | Linux: `sudo apt install docker.io`)
+- VS Code Draw.io Extension: `code --install-extension hediet.vscode-drawio`
+
+**2. Clone and Build:**
+
+```bash
+git clone https://github.com/lilepeeps/Azure-DrawIO-MCP.git
+cd Azure-DrawIO-MCP
+docker build -t azure-drawio-mcp:latest .
+```
+
+**3. Configure MCP Client** (e.g., Claude Desktop, VS Code):
+
+```json
+{
+  "mcpServers": {
+    "azure-drawio": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-v", "${workspaceFolder}:/workspace",
+        "-e", "WORKSPACE_MOUNT=/workspace",
+        "azure-drawio-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+> **Note**: When using Docker, the server automatically translates host paths to the container mount point at `/workspace`.
+
+**Benefits:**
+- No Python environment management needed
+- Works consistently across all your projects
+- Easy to update: just rebuild the image
+
+---
+
+### Option B: Install from GitHub (No Clone Required)
+
+**1. Install Prerequisites:**
+- Python 3.10+
+- `uv` package manager: `pip install uv` or `winget install astral-sh.uv`
+- VS Code Draw.io Extension: `code --install-extension hediet.vscode-drawio`
+
+**2. Configure MCP Client:**
+
+```json
+{
+  "mcpServers": {
+    "Azure Draw.io MCP Server": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "--from", 
+        "git+https://github.com/lilepeeps/Azure-DrawIO-MCP.git",
+        "azure-drawio-mcp"
+      ]
+    }
+  }
+}
+```
+
+---
+
+### Option C: Local Python Installation
+
+**1. Install Prerequisites:**
+
+Python 3.10+ is required:
+
+```bash
 # Windows
 winget install Python.Python.3.12
 
@@ -65,18 +137,15 @@ brew install python@3.12
 sudo apt install python3.12 python3.12-venv
 ```
 
-**VS Code Draw.io Extension** (highly recommended):
+VS Code Draw.io Extension:
 
-```powershell
-# Install via command line
+```bash
 code --install-extension hediet.vscode-drawio
-
-# Or search for "Draw.io Integration" in VS Code Extensions (Ctrl+Shift+X)
 ```
 
-### 2. Clone and Install
+**2. Clone and Install:**
 
-```powershell
+```bash
 git clone https://github.com/lilepeeps/Azure-DrawIO-MCP.git
 cd Azure-DrawIO-MCP
 
@@ -93,58 +162,36 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Verify Draw.io Extension
-
-After installing the extension, verify it works:
-
-1. Create a test file: `test.drawio`
-2. Open it in VS Code
-3. You should see the Draw.io editor interface
-
-If the extension is not installed, `.drawio` files will open as XML text.
-
-### 4. Configure MCP Server
-
-#### Option A: Install from GitHub (No Clone Required) ⭐
-
-Add to your VS Code MCP configuration (`~/.vscode/mcp.json` or workspace settings):
+**3. Configure MCP Client:**
 
 ```json
 {
-  "servers": {
-    "Azure Draw.io MCP Server": {
-      "type": "stdio",
-      "command": "uvx",
-      "args": [
-        "--from", 
-        "git+https://github.com/lilepeeps/Azure-DrawIO-MCP.git",
-        "azure-drawio-mcp"
-      ]
-    }
-  }
-}
-```
-
-> **Note**: Requires `uv` installed. Install with: `pip install uv` or `winget install astral-sh.uv`
-
-#### Option B: Clone and Run Locally
-
-```json
-{
-  "servers": {
+  "mcpServers": {
     "Azure Draw.io MCP Server": {
       "type": "stdio",
       "command": "python",
-      "args": [
-        "-m", "azure_drawio_mcp_server.server"
-      ],
-      "cwd": "C:/path/to/Azure-DrawIO-MCP"
+      "args": ["-m", "azure_drawio_mcp_server.server"],
+      "cwd": "/path/to/Azure-DrawIO-MCP"
     }
   }
 }
 ```
 
-### 5. Generate Diagrams
+---
+
+### Verify Installation
+
+After configuration, test the MCP server with the following prompt:
+
+```
+Use #azure-draw.io-mcp-server to generate an Azure diagram with a Function App, Storage Account, and Cosmos DB
+```
+
+The diagram should be created in your workspace's `diagrams/` folder and open in VS Code.
+
+---
+
+## Usage Examples
 
 In VS Code with GitHub Copilot, use prompts like:
 
@@ -302,7 +349,11 @@ azure-drawio-mcp/
 │   ├── azure_shapes.py       # Azure resource type mappings and styles
 │   ├── scanner.py            # Workspace scanner for auto-discovery
 │   └── models.py             # Pydantic request/response models
-├── requirements.txt          # Python dependencies
+├── diagrams/                 # Generated diagram output directory
+├── .dockerignore             # Docker build exclusions
+├── Dockerfile                # Container image definition
+├── pyproject.toml            # Python package metadata and dependencies
+├── requirements.txt          # Python dependencies (pip)
 ├── README.md                 # This file
 └── LICENSE                   # MIT License
 ```

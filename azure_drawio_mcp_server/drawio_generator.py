@@ -303,6 +303,82 @@ def _create_legend(
         current_y += ROW_HEIGHT
 
 
+def _determine_output_path(
+    workspace_dir: Optional[str],
+    filename: Optional[str],
+) -> Tuple[str, str]:
+    """
+    Determine the output directory and filename for the diagram.
+    
+    Handles Docker container path translation by checking if the workspace_dir
+    exists and falling back to the WORKSPACE_MOUNT environment variable if needed.
+    
+    Args:
+        workspace_dir: Requested workspace directory (may be host path in Docker)
+        filename: Requested filename (will add .drawio if missing)
+    
+    Returns:
+        Tuple of (output_directory, filename)
+    """
+    # Determine filename
+    if filename:
+        if not filename.endswith('.drawio'):
+            filename = f"{filename}.drawio"
+    else:
+        filename = f"azure_diagram_{uuid.uuid4().hex[:8]}.drawio"
+    
+    # Determine output directory with Docker container support
+    output_dir = None
+    
+    if workspace_dir:
+        # Resolve workspace path, handling Docker container path translation
+        workspace_path = _resolve_workspace_path(workspace_dir)
+        
+        if workspace_path:
+            # Check if path already includes 'diagrams' subdirectory
+            if 'diagrams' in workspace_path.lower():
+                output_dir = workspace_path
+            else:
+                output_dir = os.path.join(workspace_path, 'diagrams')
+    
+    # Fall back to temp directory if no valid workspace found
+    if not output_dir:
+        output_dir = os.path.join(tempfile.gettempdir(), 'azure-drawio-diagrams')
+        logger.warning(f"No valid workspace directory found, using temp: {output_dir}")
+    
+    return output_dir, filename
+
+
+def _resolve_workspace_path(requested_path: str) -> Optional[str]:
+    """
+    Resolve workspace path, handling Docker container path translation.
+    
+    When running in Docker, the host path won't exist in the container.
+    This function detects that scenario and translates to the container mount point.
+    
+    Args:
+        requested_path: The workspace path (may be host path or container path)
+    
+    Returns:
+        Resolved path if valid, None otherwise
+    """
+    # If path exists as-is, use it
+    if os.path.isdir(requested_path):
+        return requested_path
+    
+    # Path doesn't exist - check if we're in a Docker container
+    container_mount = os.environ.get('WORKSPACE_MOUNT', '/workspace')
+    
+    if os.path.isdir(container_mount):
+        logger.info(
+            f"Path {requested_path} not found in container, "
+            f"using container mount: {container_mount}"
+        )
+        return container_mount
+    
+    return None
+
+
 async def generate_drawio_diagram(
     request: DiagramRequest,
 ) -> DiagramResponse:
@@ -315,23 +391,11 @@ async def generate_drawio_diagram(
     - draw.io web application
     """
     try:
-        # Determine output path
-        if request.filename:
-            filename = request.filename
-            if not filename.endswith('.drawio'):
-                filename = f"{filename}.drawio"
-        else:
-            filename = f"azure_diagram_{uuid.uuid4().hex[:8]}.drawio"
-        
-        # Determine output directory
-        if request.workspace_dir and os.path.isdir(request.workspace_dir):
-            # Check if workspace_dir already contains 'diagrams'
-            if 'diagrams' in request.workspace_dir.lower():
-                output_dir = request.workspace_dir
-            else:
-                output_dir = os.path.join(request.workspace_dir, 'diagrams')
-        else:
-            output_dir = os.path.join(tempfile.gettempdir(), 'azure-drawio-diagrams')
+        # Determine output path and filename
+        output_dir, filename = _determine_output_path(
+            request.workspace_dir,
+            request.filename
+        )
         
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, filename)

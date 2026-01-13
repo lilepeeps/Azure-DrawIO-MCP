@@ -1,0 +1,37 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Dev Container
+.devcontainer/
+
+# Generated diagrams (not needed in image)
+diagrams/
+
+# CI/CD
+.github/
+
+# OS
+.DS_Store
+Thumbs.db
