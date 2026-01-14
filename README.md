@@ -8,6 +8,23 @@ Generate **editable** Azure architecture diagrams in Draw.io format using an MCP
 
 > **Attribution**: This project is inspired by [dminkovski/azure-diagram-mcp](https://github.com/dminkovski/azure-diagram-mcp) which generates PNG diagrams using the Python `diagrams` package. This version outputs editable `.drawio` files instead.
 
+## Table of Contents
+
+- [Why Draw.io Instead of PNG?](#why-drawio-instead-of-png)
+- [What It Does](#what-it-does)
+- [Requirements](#requirements)
+- [Quick Start](#quick-start)
+  - [Option A: Docker](#option-a-docker-recommended-for-multi-project-use-)
+  - [Option B: Install from GitHub](#option-b-install-from-github-simplest-setup-)
+  - [Option C: Local Python](#option-c-local-python-installation)
+- [Usage Examples](#usage-examples)
+- [MCP Tools](#mcp-tools)
+- [Opening Generated Diagrams](#opening-generated-diagrams)
+- [Example Prompts](#example-prompts-for-github-copilot)
+- [Project Structure](#project-structure)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+
 ## Why Draw.io Instead of PNG?
 
 | Feature | PNG (Original) | Draw.io (This Project) |
@@ -52,6 +69,10 @@ Choose one of three installation methods:
 
 > **💡 Tip:** This project includes a [dev container](.devcontainer/devcontainer.json) for instant setup - just open in VS Code and select "Reopen in Container".
 
+> **⚠️ Configuration Format Note:** VS Code uses `servers` in `.vscode/mcp.json`, while Claude Desktop uses `mcpServers` in `claude_desktop_config.json`. Configuration examples for both are provided below.
+>
+> **📄 VS Code Sample:** Copy [`.vscode/mcp.json.sample`](.vscode/mcp.json.sample) to `.vscode/mcp.json` in your project and uncomment your preferred option.
+
 ### Option A: Docker (Recommended for Multi-Project Use) 🐳
 
 **1. Install Prerequisites:**
@@ -66,12 +87,16 @@ cd Azure-DrawIO-MCP
 docker build -t azure-drawio-mcp:latest .
 ```
 
-**3. Configure MCP Client** (e.g., Claude Desktop, VS Code):
+**3. Configure MCP Client:**
+
+<details>
+<summary><strong>VS Code (.vscode/mcp.json)</strong></summary>
 
 ```json
 {
-  "mcpServers": {
+  "servers": {
     "azure-drawio": {
+      "type": "stdio",
       "command": "docker",
       "args": [
         "run", "--rm", "-i",
@@ -84,6 +109,29 @@ docker build -t azure-drawio-mcp:latest .
 }
 ```
 
+</details>
+
+<details>
+<summary><strong>Claude Desktop (claude_desktop_config.json)</strong></summary>
+
+```json
+{
+  "mcpServers": {
+    "azure-drawio": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-v", "/path/to/your/workspace:/workspace",
+        "-e", "WORKSPACE_MOUNT=/workspace",
+        "azure-drawio-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+</details>
+
 > **Note**: When using Docker, the server automatically translates host paths to the container mount point at `/workspace`.
 
 **Benefits:**
@@ -93,7 +141,7 @@ docker build -t azure-drawio-mcp:latest .
 
 ---
 
-### Option B: Install from GitHub (No Clone Required)
+### Option B: Install from GitHub (Simplest Setup) ⚡
 
 **1. Install Prerequisites:**
 - Python 3.10+
@@ -102,10 +150,13 @@ docker build -t azure-drawio-mcp:latest .
 
 **2. Configure MCP Client:**
 
+<details>
+<summary><strong>VS Code (.vscode/mcp.json)</strong></summary>
+
 ```json
 {
-  "mcpServers": {
-    "Azure Draw.io MCP Server": {
+  "servers": {
+    "azure-drawio": {
       "type": "stdio",
       "command": "uvx",
       "args": [
@@ -117,6 +168,28 @@ docker build -t azure-drawio-mcp:latest .
   }
 }
 ```
+
+</details>
+
+<details>
+<summary><strong>Claude Desktop (claude_desktop_config.json)</strong></summary>
+
+```json
+{
+  "mcpServers": {
+    "azure-drawio": {
+      "command": "uvx",
+      "args": [
+        "--from", 
+        "git+https://github.com/lilepeeps/Azure-DrawIO-MCP.git",
+        "azure-drawio-mcp"
+      ]
+    }
+  }
+}
+```
+
+</details>
 
 ---
 
@@ -164,10 +237,13 @@ pip install -r requirements.txt
 
 **3. Configure MCP Client:**
 
+<details>
+<summary><strong>VS Code (.vscode/mcp.json)</strong></summary>
+
 ```json
 {
-  "mcpServers": {
-    "Azure Draw.io MCP Server": {
+  "servers": {
+    "azure-drawio": {
       "type": "stdio",
       "command": "python",
       "args": ["-m", "azure_drawio_mcp_server.server"],
@@ -176,6 +252,25 @@ pip install -r requirements.txt
   }
 }
 ```
+
+</details>
+
+<details>
+<summary><strong>Claude Desktop (claude_desktop_config.json)</strong></summary>
+
+```json
+{
+  "mcpServers": {
+    "azure-drawio": {
+      "command": "python",
+      "args": ["-m", "azure_drawio_mcp_server.server"],
+      "cwd": "/path/to/Azure-DrawIO-MCP"
+    }
+  }
+}
+```
+
+</details>
 
 ---
 
@@ -305,25 +400,6 @@ Set `open_in_vscode: true` when generating diagrams and they'll open automatical
 1. Download Draw.io: https://www.drawio.com/
 2. Open → Select your `.drawio` file
 3. Edit and export as needed
-
-## Resource Type Reference
-
-Use these `resource_type` values when defining resources:
-
-```
-Compute:     VM, VMSS, AppService, FunctionApp, AKS, ContainerInstances, ACR
-Network:     VNet, Subnet, LoadBalancer, ApplicationGateway, FrontDoor, Firewall, VPNGateway
-Storage:     StorageAccount, BlobStorage, FileStorage, DataLake, ManagedDisk
-Database:    SQLDatabase, CosmosDB, Redis, MySQL, PostgreSQL, Synapse
-Web:         APIM, SignalR, StaticWebApp
-Security:    KeyVault, EntraID, ManagedIdentity, Sentinel, SecurityCenter
-Integration: ServiceBus, EventHub, EventGrid, LogicApp, DataFactory
-AI/ML:       AzureOpenAI, CognitiveServices, MachineLearning, AISearch, BotService
-Analytics:   Synapse, Databricks, StreamAnalytics, HDInsight, PowerBI
-DevOps:      DevOps, Monitor, LogAnalytics, AppInsights, Automation
-IoT:         IoTHub, IoTCentral, DigitalTwins
-General:     User, Client, Browser, Mobile, OnPremise, Internet, Cloud
-```
 
 ## Example Prompts for GitHub Copilot
 
