@@ -41,6 +41,8 @@ class ResourceGroup(BaseModel):
     id: str = Field(..., description='Unique identifier for this group')
     name: str = Field(..., description='Display name for the group')
     color: Optional[str] = Field(None, description='Background color (hex)')
+    parent: Optional[str] = Field(None, description='Parent group ID for nested containers')
+    style: Optional[str] = Field('swimlane', description='Group style: swimlane (titled), box (simple rectangle)')
 
 
 class DiagramRequest(BaseModel):
@@ -52,7 +54,9 @@ class DiagramRequest(BaseModel):
     workspace_dir: Optional[str] = Field(None, description='Workspace directory to save diagrams')
     filename: Optional[str] = Field(None, description='Output filename (without extension)')
     open_in_vscode: bool = Field(False, description='Open the diagram in VS Code after generation (requires hediet.vscode-drawio extension)')
-    show_legend: bool = Field(True, description='Show a legend table at the bottom with numbered resources, names, types, and rationale')
+    show_legend: bool = Field(False, description='Show a legend table at the bottom with numbered resources, names, types, and rationale')
+    show_resource_numbers: bool = Field(False, description='Show numbered labels [1], [2] etc. on resources (disable for cleaner look)')
+    use_nested_groups: bool = Field(False, description='Enable nested group containers (App Service Plan containing Web App, etc.)')
 
 
 class DiagramResponse(BaseModel):
