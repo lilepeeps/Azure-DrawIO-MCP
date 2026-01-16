@@ -649,9 +649,6 @@ async def generate_drawio_diagram(
             if resource.group and resource.group in group_objects:
                 parent_group = group_objects[resource.group]
             
-            # Create the object - either on page or as child of group
-            obj = drawpyo_objects.Object(page=page)
-            
             # Get the resource number for labeling
             res_num = resource_index.get(resource.id, 0)
             
@@ -662,6 +659,16 @@ async def generate_drawio_diagram(
                 and AZURE_SHAPES[resolved_type][2] is not None
             )
             
+            # Create the object with parent set during construction for proper nesting
+            # When parent is set, positions become relative to parent's origin
+            if parent_group:
+                obj = drawpyo_objects.Object(
+                    page=page,
+                    parent=parent_group,
+                )
+            else:
+                obj = drawpyo_objects.Object(page=page)
+            
             # Show numbers if explicitly requested OR if legend is shown (for cross-reference)
             show_numbers = request.show_resource_numbers or request.show_legend
             
@@ -671,7 +678,6 @@ async def generate_drawio_diagram(
                     obj.value = f"[{res_num}] {resource.name}"
                 else:
                     obj.value = resource.name
-                # Set width and height directly (size tuple setter doesn't work in drawpyo)
                 obj.width = ICON_SIZE
                 obj.height = ICON_SIZE
             else:
@@ -684,12 +690,15 @@ async def generate_drawio_diagram(
                 obj.height = DEFAULT_HEIGHT
             
             x, y = positions[resource.id]
-            obj.position = (x, y)
-            obj.apply_style_string(style)
             
-            # Add as child of group to achieve proper nesting
+            # Use position_rel_to_parent for grouped items (coordinates are already relative)
+            # Use absolute position for ungrouped items
             if parent_group:
-                parent_group.add_object(obj)
+                obj.position_rel_to_parent = (x, y)
+            else:
+                obj.position = (x, y)
+            
+            obj.apply_style_string(style)
             
             objects[resource.id] = obj
         
