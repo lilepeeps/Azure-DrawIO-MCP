@@ -29,15 +29,31 @@ from azure_drawio_mcp_server.azure_shapes import (
     AZURE_COLORS,
     AZURE_SHAPES,
 )
+from azure_drawio_mcp_server.topology_layout import (
+    calculate_topology_layout,
+)
 
 logger = logging.getLogger(__name__)
 
-# Grid layout constants - increased for better spacing
-GRID_SPACING_X = 300
-GRID_SPACING_Y = 220
-START_X = 80
-START_Y = 100
-GROUP_PADDING = 100
+# A4 paper size at 96 DPI (landscape orientation for architecture diagrams)
+# A4 = 297mm x 210mm = 1123 x 794 pixels at 96 DPI
+A4_WIDTH = 1123
+A4_HEIGHT = 794
+PAGE_MARGIN = 40  # Margin from page edges
+
+# Usable canvas area within A4
+CANVAS_WIDTH = A4_WIDTH - (PAGE_MARGIN * 2)   # ~1043px
+CANVAS_HEIGHT = A4_HEIGHT - (PAGE_MARGIN * 2)  # ~714px
+
+# Grid layout constants - sized to fit icons (40px) + labels with comfortable spacing
+# Generous horizontal spacing to leave room for connection labels
+ICON_CELL_WIDTH = 110   # Width per icon cell (40px icon + room for edge labels)
+ICON_CELL_HEIGHT = 85   # Height per icon cell (40px icon + 45px for label)
+GROUP_INTERNAL_PAD = 25 # Padding inside groups around icons
+GROUP_TITLE_HEIGHT = 24 # Height for group title bar
+GROUP_GAP = 30          # Gap between groups (room for inter-group connections)
+START_X = PAGE_MARGIN
+START_Y = PAGE_MARGIN
 
 # Legend table styling
 LEGEND_HEADER_STYLE = (
@@ -94,10 +110,18 @@ def _open_in_vscode(file_path: str) -> bool:
 
 def _calculate_layout(
     resources: List[AzureResource],
-    groups: List[ResourceGroup]
+    groups: List[ResourceGroup],
+    connections: Optional[List[Connection]] = None,
 ) -> Tuple[Dict[str, Tuple[int, int]], Dict[str, Tuple[int, int, int, int]]]:
     """
     Calculate positions for resources and bounds for groups.
+    Creates a CLEAN layout constrained to A4 paper size (landscape).
+    
+    Philosophy: Generate a good starting point that's easy to adjust.
+    Users can drag icons in Draw.io to fine-tune the layout.
+    
+    If connections are provided, uses topology-aware ordering to place
+    source resources/groups first (left) and sink resources/groups last (right).
     
     Returns:
         - positions: Dict mapping resource ID to (x, y) position
@@ -108,7 +132,21 @@ def _calculate_layout(
     positions: Dict[str, Tuple[int, int]] = {}
     group_bounds: Dict[str, Tuple[int, int, int, int]] = {}
     
-    # Separate resources by group
+    # Use topology-aware ordering if connections provided
+    if connections:
+        ordered_groups, group_resources, _ = calculate_topology_layout(
+            resources, groups, connections
+        )
+    else:
+        ordered_groups = groups
+        group_resources = {}
+        for r in resources:
+            if r.group not in group_resources:
+                group_resources[r.group] = []
+            group_resources[r.group].append(r)
+    
+    
+    # Separate resources by group (using topology order if available)
     grouped: Dict[Optional[str], List[AzureResource]] = {}
     for resource in resources:
         group_id = resource.group
@@ -116,84 +154,80 @@ def _calculate_layout(
             grouped[group_id] = []
         grouped[group_id].append(resource)
     
+    current_x = START_X
     current_y = START_Y
+    row_max_height = 0
     
-    # Position ungrouped resources first (at the top)
-    if None in grouped:
-        ungrouped = grouped[None]
-        for i, resource in enumerate(ungrouped):
+    # Position ungrouped resources first (inline, left to right)
+    # Use topology-ordered ungrouped resources if available
+    ungrouped_resources = group_resources.get(None, grouped.get(None, []))
+    if ungrouped_resources:
+        for i, resource in enumerate(ungrouped_resources):
             if resource.x is not None and resource.y is not None:
                 positions[resource.id] = (resource.x, resource.y)
             else:
-                x = START_X + (i % 5) * GRID_SPACING_X
-                y = current_y + (i // 5) * GRID_SPACING_Y
-                positions[resource.id] = (x, y)
+                # Check if we need to wrap to next row
+                if current_x + ICON_CELL_WIDTH > CANVAS_WIDTH + PAGE_MARGIN:
+                    current_x = START_X
+                    current_y += ICON_CELL_HEIGHT
+                    
+                positions[resource.id] = (current_x, current_y)
+                current_x += ICON_CELL_WIDTH
+                row_max_height = max(row_max_height, ICON_CELL_HEIGHT)
         
-        # Move y down for grouped resources
-        rows_used = (len(ungrouped) + 4) // 5
-        current_y += rows_used * GRID_SPACING_Y + GROUP_PADDING * 2
+        # Move to new row after ungrouped resources
+        current_x = START_X
+        current_y += row_max_height + GROUP_GAP
+        row_max_height = 0
     
-    # Position groups and their resources
-    group_x = START_X
-    group_row_height = 0
-    groups_per_row = 2  # Place 2 groups side by side
-    
-    # Sizing constants for content
-    TITLE_HEIGHT = 40       # Height for swimlane title bar
-    CONTENT_PADDING = 30    # Padding inside group around resources
-    ICON_WIDTH = ICON_SIZE  # Width of each icon
-    ICON_HEIGHT = ICON_SIZE + 30  # Icon + label below
-    
-    for group_idx, group in enumerate(groups):
-        if group.id in grouped:
-            group_resources = grouped[group.id]
-            num_resources = len(group_resources)
+    # Position groups and their resources HORIZONTALLY (left to right)
+    # Uses topology-ordered groups: sources on left, sinks on right
+    # Simple grid layout within groups - easy for users to adjust
+    for group in ordered_groups:
+        # Get topology-ordered resources for this group
+        grp_resources = group_resources.get(group.id, grouped.get(group.id, []))
+        if not grp_resources:
+            continue
             
-            # Layout resources in a grid inside the group
-            cols = min(3, num_resources)  # Max 3 columns
-            rows = (num_resources + cols - 1) // cols
-            
-            # Calculate group dimensions to fully contain resources
-            content_width = cols * GRID_SPACING_X
-            content_height = rows * GRID_SPACING_Y
-            
-            group_width = CONTENT_PADDING * 2 + content_width
-            group_height = TITLE_HEIGHT + CONTENT_PADDING * 2 + content_height
-            
-            # Ensure minimum size
-            group_width = max(300, group_width)
-            group_height = max(150, group_height)
-            
-            # Position each resource RELATIVE to the group's origin (0,0)
-            # Resources start after title bar and padding
-            for i, resource in enumerate(group_resources):
-                if resource.x is not None and resource.y is not None:
-                    # User specified position (relative to group)
-                    positions[resource.id] = (resource.x, resource.y)
-                else:
-                    # Auto-layout within group
-                    col = i % cols
-                    row = i // cols
-                    # Position relative to group origin
-                    rel_x = CONTENT_PADDING + col * GRID_SPACING_X
-                    rel_y = TITLE_HEIGHT + CONTENT_PADDING + row * GRID_SPACING_Y
-                    positions[resource.id] = (rel_x, rel_y)
-            
-            # Store group bounds (position and size)
-            group_bounds[group.id] = (group_x, current_y, group_width, group_height)
-            
-            # Track tallest group in this row
-            group_row_height = max(group_row_height, group_height)
-            
-            # Move to next group position
-            if (group_idx + 1) % groups_per_row == 0:
-                # New row of groups
-                group_x = START_X
-                current_y += group_row_height + GROUP_PADDING * 2
-                group_row_height = 0
+        num_resources = len(grp_resources)
+        
+        # Simple grid layout - resources flow left to right, then wrap
+        # More generous spacing for easier manual adjustment
+        cols = min(3, num_resources)  # Max 3 icons per row for cleaner look
+        rows = (num_resources + cols - 1) // cols
+        
+        content_width = cols * ICON_CELL_WIDTH
+        content_height = rows * ICON_CELL_HEIGHT
+        
+        group_width = GROUP_INTERNAL_PAD * 2 + content_width
+        group_height = GROUP_TITLE_HEIGHT + GROUP_INTERNAL_PAD * 2 + content_height
+        
+        # Check if group fits on current row (respect A4 width)
+        if current_x + group_width > CANVAS_WIDTH + PAGE_MARGIN:
+            current_x = START_X
+            current_y += row_max_height + GROUP_GAP
+            row_max_height = 0
+        
+        # Position each resource RELATIVE to the group's origin
+        # Resources are topology-ordered (sources first within group)
+        for i, resource in enumerate(grp_resources):
+            if resource.x is not None and resource.y is not None:
+                positions[resource.id] = (resource.x, resource.y)
             else:
-                # Same row, move right
-                group_x += group_width + GROUP_PADDING * 2
+                col = i % cols
+                row = i // cols
+                rel_x = GROUP_INTERNAL_PAD + col * ICON_CELL_WIDTH
+                rel_y = GROUP_TITLE_HEIGHT + GROUP_INTERNAL_PAD + row * ICON_CELL_HEIGHT
+                positions[resource.id] = (rel_x, rel_y)
+        
+        # Store group bounds
+        group_bounds[group.id] = (current_x, current_y, group_width, group_height)
+        
+        # Track max height in this row
+        row_max_height = max(row_max_height, group_height)
+        
+        # Move to next group position (horizontal)
+        current_x += group_width + GROUP_GAP
     
     return positions, group_bounds
 
@@ -223,19 +257,19 @@ def _create_legend(
     y: int,
 ) -> None:
     """
-    Create a legend table at the specified position.
+    Create a legend table at the specified position (on separate A4 page area).
     
     The legend shows numbered resources with their name, type, and rationale.
-    Each row is manually positioned (not using swimlane stacking which doesn't work).
+    Sized to fit within A4 width constraints.
     """
-    # Calculate column widths
-    COL_NUM = 50
-    COL_NAME = 200
-    COL_TYPE = 180
-    COL_RATIONALE = 350
-    TABLE_WIDTH = COL_NUM + COL_NAME + COL_TYPE + COL_RATIONALE
-    ROW_HEIGHT = 28
-    HEADER_HEIGHT = 36
+    # Calculate column widths - fit within A4 width (~1043px usable)
+    COL_NUM = 35
+    COL_NAME = 180
+    COL_TYPE = 160
+    COL_RATIONALE = 300
+    TABLE_WIDTH = min(COL_NUM + COL_NAME + COL_TYPE + COL_RATIONALE, CANVAS_WIDTH)
+    ROW_HEIGHT = 24
+    HEADER_HEIGHT = 30
     
     # Calculate total height
     table_height = HEADER_HEIGHT + (len(resources) + 1) * ROW_HEIGHT
@@ -379,6 +413,117 @@ def _resolve_workspace_path(requested_path: str) -> Optional[str]:
     return None
 
 
+def validate_diagram_request(request: DiagramRequest) -> Dict[str, List[str]]:
+    """
+    Validate a diagram request and provide guidance for better results.
+    
+    Returns a dict with 'errors', 'warnings', and 'tips' lists.
+    Errors must be fixed. Warnings are recommendations. Tips are optional improvements.
+    """
+    result = {
+        'errors': [],
+        'warnings': [],
+        'tips': [],
+    }
+    
+    # Check for empty resources
+    if not request.resources:
+        result['errors'].append(
+            "No resources specified. Add at least one AzureResource with id, name, and resource_type."
+        )
+        return result
+    
+    # Check resource types for valid icons
+    from azure_drawio_mcp_server.azure_shapes import AZURE_SHAPES, RESOURCE_TYPE_ALIASES
+    
+    unknown_types = []
+    for res in request.resources:
+        resolved = RESOURCE_TYPE_ALIASES.get(res.resource_type, res.resource_type)
+        if resolved not in AZURE_SHAPES:
+            unknown_types.append(f"{res.name} ({res.resource_type})")
+    
+    if unknown_types:
+        result['warnings'].append(
+            f"Unknown resource types will show as gray boxes: {', '.join(unknown_types[:5])}"
+            + (f" and {len(unknown_types) - 5} more" if len(unknown_types) > 5 else "")
+            + ". Use common aliases like 'SQL', 'Cosmos', 'AKS', 'Functions', 'WebApp', etc."
+        )
+    
+    # Check for groups
+    if not request.groups:
+        result['tips'].append(
+            "Consider adding groups to organize resources visually. "
+            "Groups help structure the diagram and make it easier to understand."
+        )
+    else:
+        # Check for resources without groups
+        grouped_resources = {r.id for r in request.resources if r.group}
+        ungrouped = [r.name for r in request.resources if r.id not in grouped_resources]
+        if ungrouped and len(ungrouped) > len(request.resources) / 2:
+            result['warnings'].append(
+                f"Most resources are ungrouped. Assign resources to groups using the 'group' field."
+            )
+    
+    # Check for connections
+    if not request.connections:
+        result['tips'].append(
+            "No connections defined. Add connections to show data flow between resources. "
+            "Connections also help with automatic layout ordering."
+        )
+    else:
+        # Check for orphan resources (no connections)
+        connected_ids = set()
+        for conn in request.connections:
+            connected_ids.add(conn.source)
+            connected_ids.add(conn.target)
+        
+        orphans = [r.name for r in request.resources if r.id not in connected_ids]
+        if orphans:
+            result['tips'].append(
+                f"Some resources have no connections: {', '.join(orphans[:3])}"
+                + (f" and {len(orphans) - 3} more" if len(orphans) > 3 else "")
+            )
+    
+    # Check for duplicate IDs
+    ids = [r.id for r in request.resources]
+    duplicates = [id for id in ids if ids.count(id) > 1]
+    if duplicates:
+        result['errors'].append(
+            f"Duplicate resource IDs found: {', '.join(set(duplicates))}. Each resource must have a unique id."
+        )
+    
+    # Provide helpful tips based on resource count
+    if len(request.resources) > 15:
+        result['tips'].append(
+            f"Large diagram with {len(request.resources)} resources. "
+            "Consider breaking into multiple diagrams or using groups effectively."
+        )
+    
+    return result
+
+
+def format_validation_message(validation: Dict[str, List[str]]) -> str:
+    """Format validation results as a user-friendly message."""
+    lines = []
+    
+    if validation['errors']:
+        lines.append("❌ **Errors (must fix):**")
+        for err in validation['errors']:
+            lines.append(f"   • {err}")
+    
+    if validation['warnings']:
+        lines.append("⚠️ **Warnings:**")
+        for warn in validation['warnings']:
+            lines.append(f"   • {warn}")
+    
+    if validation['tips']:
+        lines.append("💡 **Tips for better diagrams:**")
+        for tip in validation['tips']:
+            lines.append(f"   • {tip}")
+    
+    return "\n".join(lines)
+
+
 async def generate_drawio_diagram(
     request: DiagramRequest,
 ) -> DiagramResponse:
@@ -391,6 +536,22 @@ async def generate_drawio_diagram(
     - draw.io web application
     """
     try:
+        # Validate request and provide guidance
+        validation = validate_diagram_request(request)
+        
+        # If there are errors, return early with guidance
+        if validation['errors']:
+            error_msg = format_validation_message(validation)
+            return DiagramResponse(
+                status='error',
+                message=f"Validation failed:\n{error_msg}",
+            )
+        
+        # Log warnings and tips for user awareness
+        if validation['warnings'] or validation['tips']:
+            guidance = format_validation_message(validation)
+            logger.info(f"Diagram generation guidance:\n{guidance}")
+        
         # Determine output path and filename
         output_dir, filename = _determine_output_path(
             request.workspace_dir,
@@ -407,9 +568,46 @@ async def generate_drawio_diagram(
         
         page = drawpyo.Page(file=file)
         page.name = request.title
+        # Set page to A4 landscape orientation
+        page.width = A4_WIDTH   # 1123px (297mm)
+        page.height = A4_HEIGHT  # 794px (210mm)
+        
+        # Add instruction text at top of diagram if enabled
+        instructions_height = 0
+        if getattr(request, 'show_instructions', True):
+            instructions_text = (
+                "<i>This is your generated Azure architecture diagram. "
+                "Resources are organized in groups that can be moved and resized. "
+                "Drag icons to reposition them — connections will auto-route. "
+                "Double-click connections to add labels. "
+                "Layout is optimized for A4 landscape.</i>"
+            )
+            instructions_obj = drawpyo_objects.Object(page=page)
+            instructions_obj.value = instructions_text
+            instructions_obj.position = (PAGE_MARGIN, 10)
+            instructions_obj.width = CANVAS_WIDTH
+            instructions_obj.height = 30
+            instructions_obj.apply_style_string(
+                "text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;"
+                "rounded=0;fontSize=10;fontColor=#666666;strokeColor=none;fillColor=none;"
+            )
+            instructions_height = 35  # Add spacing below instructions
         
         # Calculate layout for all resources and groups
-        positions, group_bounds = _calculate_layout(request.resources, request.groups)
+        # Uses topology-aware ordering when connections are provided
+        positions, group_bounds = _calculate_layout(
+            request.resources, 
+            request.groups,
+            request.connections,  # Enable topology-aware layout
+        )
+        
+        # Offset all positions by instructions height
+        if instructions_height > 0:
+            # Offset group bounds
+            group_bounds = {
+                gid: (x, y + instructions_height, w, h) 
+                for gid, (x, y, w, h) in group_bounds.items()
+            }
         
         # Track created objects for edge connections
         objects: Dict[str, drawpyo_objects.Object] = {}
@@ -429,14 +627,18 @@ async def generate_drawio_diagram(
             group_obj.width = width
             group_obj.height = height
             
-            # Apply group style
-            color = group.color or '#E6F3FF'
-            group_obj.apply_style_string(get_group_style(color))
+            # Apply group style - use the style specified or default to box (compact)
+            color = group.color or '#E6E6E6'
+            group_style = group.style or 'box'
+            group_obj.apply_style_string(get_group_style(color, group_style))
             
             group_objects[group.id] = group_obj
         
         # Build resource index map for numbering (matches legend order)
         resource_index = {res.id: idx + 1 for idx, res in enumerate(request.resources)}
+        
+        # Import alias resolver to check if resource type has an icon
+        from azure_drawio_mcp_server.azure_shapes import RESOURCE_TYPE_ALIASES
         
         # Create resource shapes - nest inside groups when applicable
         for resource in request.resources:
@@ -450,10 +652,11 @@ async def generate_drawio_diagram(
             # Get the resource number for labeling
             res_num = resource_index.get(resource.id, 0)
             
-            # Check if this resource type uses an icon (has an icon path)
+            # Check if this resource type uses an icon (resolve aliases first)
+            resolved_type = RESOURCE_TYPE_ALIASES.get(resource.resource_type, resource.resource_type)
             has_icon = (
-                resource.resource_type in AZURE_SHAPES 
-                and AZURE_SHAPES[resource.resource_type][2] is not None
+                resolved_type in AZURE_SHAPES 
+                and AZURE_SHAPES[resolved_type][2] is not None
             )
             
             # Create the object with parent set during construction for proper nesting
@@ -466,14 +669,23 @@ async def generate_drawio_diagram(
             else:
                 obj = drawpyo_objects.Object(page=page)
             
+            # Show numbers if explicitly requested OR if legend is shown (for cross-reference)
+            show_numbers = request.show_resource_numbers or request.show_legend
+            
             if has_icon:
-                # For icons, show number and name below the icon
-                obj.value = f"<b style='color:#0078D4;'>[{res_num}]</b> {resource.name}"
+                # For icons, show ONLY the number and user's name - clean and simple
+                if show_numbers:
+                    obj.value = f"[{res_num}] {resource.name}"
+                else:
+                    obj.value = resource.name
                 obj.width = ICON_SIZE
                 obj.height = ICON_SIZE
             else:
-                # For fallback shapes, show number, name and type inside
-                obj.value = f"<b>[{res_num}]</b> {resource.name}\n({display_name})"
+                # For fallback shapes (gray box), show name and type so user knows what it is
+                if show_numbers:
+                    obj.value = f"[{res_num}] {resource.name}\n({display_name})"
+                else:
+                    obj.value = f"{resource.name}\n({display_name})"
                 obj.width = DEFAULT_WIDTH
                 obj.height = DEFAULT_HEIGHT
             
@@ -490,8 +702,76 @@ async def generate_drawio_diagram(
             
             objects[resource.id] = obj
         
-        # Create connections/edges
-        for conn in request.connections:
+        # Build absolute position map for edge routing
+        # For grouped resources, add group origin to get absolute position
+        absolute_positions: Dict[str, Tuple[int, int]] = {}
+        for resource in request.resources:
+            rel_x, rel_y = positions[resource.id]
+            if resource.group and resource.group in group_bounds:
+                gx, gy, gw, gh = group_bounds[resource.group]
+                absolute_positions[resource.id] = (gx + rel_x, gy + rel_y)
+            else:
+                absolute_positions[resource.id] = (rel_x, rel_y)
+        
+        # Pre-analyze connections for edge spreading
+        # Track connections per resource per direction (right/left/top/bottom)
+        # Key: (resource_id, direction) -> list of connection indices
+        outgoing_by_direction: Dict[Tuple[str, str], List[int]] = {}
+        incoming_by_direction: Dict[Tuple[str, str], List[int]] = {}
+        
+        # First pass: classify each connection by direction
+        connection_directions: List[Tuple[str, str]] = []  # (exit_dir, entry_dir) per connection
+        for i, conn in enumerate(request.connections):
+            if conn.source not in absolute_positions or conn.target not in absolute_positions:
+                connection_directions.append(('right', 'left'))  # default
+                continue
+            
+            src_x, src_y = absolute_positions[conn.source]
+            tgt_x, tgt_y = absolute_positions[conn.target]
+            dx = tgt_x - src_x
+            dy = tgt_y - src_y
+            
+            # Determine direction based on relative positions
+            if abs(dx) > abs(dy):
+                if dx > 0:
+                    exit_dir, entry_dir = 'right', 'left'
+                else:
+                    exit_dir, entry_dir = 'left', 'right'
+            else:
+                if dy > 0:
+                    exit_dir, entry_dir = 'bottom', 'top'
+                else:
+                    exit_dir, entry_dir = 'top', 'bottom'
+            
+            connection_directions.append((exit_dir, entry_dir))
+            
+            # Track this connection for its source (outgoing) and target (incoming)
+            src_key = (conn.source, exit_dir)
+            tgt_key = (conn.target, entry_dir)
+            
+            if src_key not in outgoing_by_direction:
+                outgoing_by_direction[src_key] = []
+            outgoing_by_direction[src_key].append(i)
+            
+            if tgt_key not in incoming_by_direction:
+                incoming_by_direction[tgt_key] = []
+            incoming_by_direction[tgt_key].append(i)
+        
+        def _get_spread_position(index: int, total: int) -> float:
+            """
+            Calculate spread position for edge connections.
+            Distributes connection points evenly along the edge.
+            Returns value between 0.2 and 0.8 to stay within icon bounds.
+            """
+            if total == 1:
+                return 0.5
+            # Spread between 0.2 and 0.8 to stay within icon area
+            min_pos, max_pos = 0.2, 0.8
+            step = (max_pos - min_pos) / (total - 1) if total > 1 else 0
+            return min_pos + (index * step)
+        
+        # Create connections/edges with spreading
+        for i, conn in enumerate(request.connections):
             if conn.source not in objects or conn.target not in objects:
                 logger.warning(
                     f"Connection references unknown resource: "
@@ -502,6 +782,7 @@ async def generate_drawio_diagram(
             source_obj = objects[conn.source]
             target_obj = objects[conn.target]
             
+            # Use orthogonal edges with edge-to-edge connections
             edge = drawpyo.diagram.Edge(
                 page=page,
                 source=source_obj,
@@ -511,22 +792,65 @@ async def generate_drawio_diagram(
             if conn.label:
                 edge.value = conn.label
             
-            # Set edge styling using properties instead of style string
-            edge.rounded = True
-            edge.strokeColor = '#0078D4'
-            edge.strokeWidth = 2
-            edge.endArrow = 'blockThin'
+            # Get direction for this connection
+            exit_dir, entry_dir = connection_directions[i]
             
-            # Handle line style (dashed/dotted)
+            # Calculate spread positions
+            src_key = (conn.source, exit_dir)
+            tgt_key = (conn.target, entry_dir)
+            
+            # Find this connection's index within its group
+            out_list = outgoing_by_direction.get(src_key, [i])
+            in_list = incoming_by_direction.get(tgt_key, [i])
+            out_idx = out_list.index(i) if i in out_list else 0
+            in_idx = in_list.index(i) if i in in_list else 0
+            
+            exit_spread = _get_spread_position(out_idx, len(out_list))
+            entry_spread = _get_spread_position(in_idx, len(in_list))
+            
+            # Apply connection points based on direction with spreading
+            if exit_dir == 'right':
+                edge.exitX = 1
+                edge.exitY = exit_spread
+            elif exit_dir == 'left':
+                edge.exitX = 0
+                edge.exitY = exit_spread
+            elif exit_dir == 'bottom':
+                edge.exitX = exit_spread
+                edge.exitY = 1
+            else:  # top
+                edge.exitX = exit_spread
+                edge.exitY = 0
+            
+            if entry_dir == 'left':
+                edge.entryX = 0
+                edge.entryY = entry_spread
+            elif entry_dir == 'right':
+                edge.entryX = 1
+                edge.entryY = entry_spread
+            elif entry_dir == 'top':
+                edge.entryX = entry_spread
+                edge.entryY = 0
+            else:  # bottom
+                edge.entryX = entry_spread
+                edge.entryY = 1
+            
+            # Set edge properties - thin, light lines for cleaner look
+            edge.endArrow = 'blockThin'
+            edge.strokeColor = '#999999'  # Light gray for less visual noise
+            edge.strokeWidth = 1
+            edge.rounded = 1  # Enable rounded corners for cleaner routing
+            
+            # Apply line pattern for dashed/dotted styles
             if conn.style == 'dashed':
-                edge.dashed = True
+                edge.pattern = 'dashed'
             elif conn.style == 'dotted':
-                edge.dashed = True
+                edge.pattern = 'dotted'
         
-        # Create legend if requested
+        # Create legend if requested - placed on "second A4 page" below main diagram
         if request.show_legend and len(request.resources) > 0:
-            diagram_bottom = _calculate_diagram_bottom(positions, group_bounds)
-            legend_y = diagram_bottom + GROUP_PADDING
+            # Place legend on a new "page" - offset by A4_HEIGHT + gap
+            legend_y = A4_HEIGHT + PAGE_MARGIN  # Start of second A4 page
             _create_legend(page, request.resources, START_X, legend_y)
         
         # Write the file
@@ -549,6 +873,11 @@ async def generate_drawio_diagram(
                         "hediet.vscode-drawio extension is installed."
                     )
             
+            # Build success message with any guidance
+            guidance_msg = ""
+            if validation['warnings'] or validation['tips']:
+                guidance_msg = "\n\n" + format_validation_message(validation)
+            
             return DiagramResponse(
                 status='success',
                 path=output_path,
@@ -556,6 +885,7 @@ async def generate_drawio_diagram(
                     f"Draw.io diagram generated successfully at {output_path}{open_msg}\n"
                     f"Open with VS Code Draw.io extension (hediet.vscode-drawio) "
                     f"or draw.io application to view and edit."
+                    f"{guidance_msg}"
                 ),
                 opened_in_vscode=opened,
             )

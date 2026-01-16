@@ -288,18 +288,97 @@ The diagram should be created in your workspace's `diagrams/` folder and open in
 
 ## Usage Examples
 
-In VS Code with GitHub Copilot, use prompts like:
+This MCP server supports multiple ways to generate Azure architecture diagrams:
+
+### 🎯 Method 1: Natural Language Prompts
+
+In VS Code with GitHub Copilot, describe what you want:
 
 ```
 Generate an Azure architecture diagram showing an AKS cluster with Application Gateway, 
 Container Registry, Key Vault, and Azure SQL Database
 ```
 
-Or scan your existing codebase:
+The AI will interpret your request and call the MCP server with the appropriate resources.
+
+### 📂 Method 2: Scan Existing Repository
+
+Point the server at your infrastructure code to auto-discover resources:
 
 ```
 Scan my workspace and generate an Azure architecture diagram based on my infrastructure code
 ```
+
+This scans for Bicep, Terraform, ARM templates, and Azure SDK usage patterns.
+
+### 📝 Method 3: Structured JSON Specification
+
+For precise control, provide a full specification:
+
+```json
+{
+  "title": "E-Commerce Platform",
+  "resources": [
+    {"id": "fd", "resource_type": "FrontDoor", "name": "Front Door", "group": "network"},
+    {"id": "app", "resource_type": "WebApp", "name": "Web App", "group": "compute"},
+    {"id": "sql", "resource_type": "SQL", "name": "SQL Database", "group": "data"}
+  ],
+  "groups": [
+    {"id": "network", "name": "Network"},
+    {"id": "compute", "name": "Compute"},
+    {"id": "data", "name": "Data"}
+  ],
+  "connections": [
+    {"source": "fd", "target": "app"},
+    {"source": "app", "target": "sql"}
+  ]
+}
+```
+
+---
+
+## Tips for Better Diagrams
+
+The MCP server validates your input and provides guidance:
+
+| Aspect | Recommendation |
+|--------|----------------|
+| **Resource Types** | Use friendly aliases: `SQL`, `Cosmos`, `AKS`, `Functions`, `WebApp` |
+| **Groups** | Organize resources into logical groups for better layout |
+| **Connections** | Define data flow between resources — helps auto-layout |
+| **Naming** | Use clear, short names — they appear as labels |
+| **Size** | Keep diagrams under 15-20 resources for clarity |
+
+### Common Resource Type Aliases
+
+| Type | Alias Options |
+|------|---------------|
+| Azure SQL | `SQL`, `SQLDatabase`, `SQLDB`, `AzureSQL` |
+| Cosmos DB | `Cosmos`, `CosmosDB`, `AzureCosmosDB` |
+| Kubernetes | `AKS`, `Kubernetes`, `K8s`, `KubernetesServices` |
+| Functions | `Functions`, `Function`, `FunctionApp`, `AzureFunctions` |
+| App Service | `WebApp`, `App`, `AppService` |
+| Storage | `BlobStorage`, `Blob`, `FileStorage`, `Files`, `Storage` |
+| Key Vault | `KeyVault`, `Vault` |
+| Redis | `Redis`, `RedisCache`, `Cache`, `CacheRedis` |
+
+---
+
+## Editing Generated Diagrams
+
+Generated diagrams include instruction text at the top. Here's how to customize:
+
+1. **Move Resources**: Click and drag any icon — connections auto-route
+2. **Resize Groups**: Drag group edges to make room
+3. **Move Groups**: Click the group header to drag the entire group
+4. **Add Labels**: Double-click a connection to add descriptive text
+5. **Reroute Arrows**: Click a connection and drag the waypoints
+6. **Copy/Paste**: Ctrl+C/V works for icons and groups
+7. **Add Resources**: Drag Azure icons from the shapes panel
+
+The layout is designed for **A4 landscape** export.
+
+---
 
 ## MCP Tools
 

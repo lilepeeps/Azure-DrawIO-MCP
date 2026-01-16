@@ -27,10 +27,10 @@ AZURE_COLORS = {
     'containers': '#326CE5',   # Kubernetes Blue
 }
 
-# Default dimensions for shapes
-DEFAULT_WIDTH = 90
-DEFAULT_HEIGHT = 90
-ICON_SIZE = 68
+# Default dimensions for shapes - compact for A4/PowerPoint diagrams
+DEFAULT_WIDTH = 60
+DEFAULT_HEIGHT = 50
+ICON_SIZE = 40  # Small icons for compact layouts
 
 # Base style for Draw.io Azure2 icons (SVG-based)
 # This uses the built-in Azure icon library from Draw.io
@@ -47,12 +47,13 @@ GENERAL_ICON_BASE_STYLE = (
 
 # No longer using mxgraph - all icons use Azure2 SVG library which renders properly
 
-# Fallback style for shapes without specific icons
+# Fallback style for shapes without specific icons - subtle gray box
 FALLBACK_STYLE = (
-    "rounded=1;whiteSpace=wrap;html=1;arcSize=10;"
-    "strokeWidth=2;shadow=1;glass=0;"
-    "fontColor=#FFFFFF;fontSize=11;fontStyle=1;"
+    "rounded=1;whiteSpace=wrap;html=1;arcSize=8;"
+    "strokeWidth=1;shadow=0;glass=0;"
+    "fontColor=#333333;fontSize=10;fontStyle=0;"
     "verticalAlign=middle;align=center;"
+    "fillColor=#F5F5F5;strokeColor=#CCCCCC;"
 )
 
 
@@ -68,29 +69,62 @@ def get_general_icon_style(image_path: str) -> str:
 
 def get_fallback_style(category: str, fill_color: Optional[str] = None) -> str:
     """Generate fallback style for resources without specific icons."""
-    color = fill_color or AZURE_COLORS.get(category, AZURE_COLORS['primary'])
-    return f"{FALLBACK_STYLE}fillColor={color};strokeColor=#003366;"
+    # Use the pre-defined fallback style (already has fill and stroke)
+    return FALLBACK_STYLE
 
 
-def get_group_style(color: Optional[str] = None) -> str:
-    """Generate Draw.io style string for a resource group (cluster/container)."""
-    fill = color or '#E6F3FF'
-    return (
-        # Visual styling for swimlane-like container
-        "swimlane;whiteSpace=wrap;html=1;"
-        f"fillColor={fill};fillOpacity=50;strokeColor=#0078D4;strokeWidth=2;"
-        "rounded=1;startSize=30;horizontal=1;"
-        "fontSize=12;fontStyle=1;fontColor=#0078D4;"
-        "shadow=0;glass=0;"
-    )
+def get_group_style(color: Optional[str] = None, style: str = 'swimlane') -> str:
+    """Generate Draw.io style string for a resource group (cluster/container).
+    
+    Args:
+        color: Background fill color (hex)
+        style: 'swimlane' for titled container, 'box' for simple compact rectangle
+    """
+    fill = color or '#E6E6E6'
+    
+    if style == 'box':
+        # Compact box style for professional diagrams - solid gray fill, no stroke
+        # Label positioned at top, vertically aligned to top
+        return (
+            "rounded=0;whiteSpace=wrap;html=1;"
+            f"fillColor={fill};strokeColor=none;"
+            "verticalAlign=top;align=center;"
+            "fontSize=10;fontStyle=1;fontColor=#333333;"
+            "spacingTop=5;"
+        )
+    elif style == 'dashed':
+        # Dashed outline for resource group boundaries
+        return (
+            "rounded=0;whiteSpace=wrap;html=1;dashed=1;"
+            "fillColor=none;strokeColor=#0078D4;strokeWidth=1;"
+            "verticalAlign=top;align=center;"
+            "fontSize=10;fontStyle=1;fontColor=#0078D4;"
+        )
+    else:
+        # Swimlane style with title bar (default)
+        return (
+            "swimlane;whiteSpace=wrap;html=1;"
+            f"fillColor={fill};fillOpacity=50;strokeColor=#0078D4;strokeWidth=2;"
+            "rounded=1;startSize=30;horizontal=1;"
+            "fontSize=12;fontStyle=1;fontColor=#0078D4;"
+            "shadow=0;glass=0;"
+        )
 
 
-def get_edge_style(style: str = 'solid') -> str:
-    """Generate Draw.io style string for an edge/connection."""
+def get_edge_style(style: str = 'solid', filled_arrow: bool = False) -> str:
+    """Generate Draw.io style string for an edge/connection.
+    
+    Args:
+        style: Line style - 'solid', 'dashed', or 'dotted'
+        filled_arrow: If True, use filled arrowhead; if False, use hollow (outline) arrowhead
+    """
+    # Use hollow arrowhead (endFill=0) by default for cleaner professional look
+    end_fill = "1" if filled_arrow else "0"
     base = (
-        "edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;"
-        "jettySize=auto;html=1;strokeWidth=2;strokeColor=#0078D4;"
-        "endArrow=blockThin;endFill=1;"
+        "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;"
+        f"jettySize=auto;html=1;strokeWidth=2;strokeColor=#6c8ebf;"
+        f"endArrow=blockThin;endFill={end_fill};fillColor=#dae8fc;"
+        "labelBackgroundColor=none;"
     )
     if style == 'dashed':
         base += "dashed=1;dashPattern=8 8;"
@@ -120,6 +154,7 @@ AZURE_SHAPES: Dict[str, Tuple[str, str, Optional[str]]] = {
     'DisksClassic': ('Disks Classic', 'compute', 'compute/Disks_Classic.svg'),
     'DisksSnapshot': ('Disks Snapshots', 'compute', 'compute/Disks_Snapshots.svg'),
     'FunctionApp': ('Function Apps', 'compute', 'compute/Function_Apps.svg'),
+    'FunctionApps': ('Function Apps', 'compute', 'compute/Function_Apps.svg'),  # Alias
     'Host': ('Hosts', 'compute', 'compute/Hosts.svg'),
     'HostGroup': ('Host Groups', 'compute', 'compute/Host_Groups.svg'),
     'HostPool': ('Host Pools', 'compute', 'compute/Host_Pools.svg'),
@@ -173,6 +208,7 @@ AZURE_SHAPES: Dict[str, Tuple[str, str, Optional[str]]] = {
     'DNSPrivateResolver': ('DNS Private Resolver', 'network', 'networking/DNS_Private_Resolver.svg'),
     'DNSSecurityPolicy': ('DNS Security Policy', 'network', 'networking/DNS_Security_Policy.svg'),
     'DNSZone': ('DNS Zones', 'network', 'networking/DNS_Zones.svg'),
+    'AzureDns': ('Azure DNS', 'network', 'networking/DNS_Zones.svg'),  # Alias for DNSZone
     'ExpressRouteCircuits': ('ExpressRoute Circuits', 'network', 'networking/ExpressRoute_Circuits.svg'),
     'Firewall': ('Firewalls', 'network', 'networking/Firewalls.svg'),
     'FrontDoor': ('Front Doors', 'network', 'networking/Front_Doors.svg'),
@@ -264,6 +300,7 @@ AZURE_SHAPES: Dict[str, Tuple[str, str, Optional[str]]] = {
     'APICenter': ('API Center', 'web', 'web/API_Center.svg'),
     'APIManagementService': ('API Management Services', 'web', 'app_services/API_Management_Services.svg'),
     'AppService': ('App Services', 'web', 'app_services/App_Services.svg'),
+    'AppServices': ('App Services', 'web', 'app_services/App_Services.svg'),  # Alias
     'AppServiceCertificate': ('App Service Certificates', 'web', 'app_services/App_Service_Certificates.svg'),
     'AppServiceDomain': ('App Service Domains', 'web', 'app_services/App_Service_Domains.svg'),
     'AppServiceEnvironment': ('App Service Environments', 'web', 'app_services/App_Service_Environments.svg'),
@@ -805,6 +842,132 @@ AZURE_SHAPES: Dict[str, Tuple[str, str, Optional[str]]] = {
 
 }
 
+# Alias mapping for common/intuitive names to actual AZURE_SHAPES keys
+# This helps when users type natural names that don't match exactly
+RESOURCE_TYPE_ALIASES: Dict[str, str] = {
+    # Storage aliases
+    'BlobStorage': 'BlobBlock',
+    'Blob': 'BlobBlock',
+    'FileStorage': 'StorageAzureFiles',
+    'Files': 'StorageAzureFiles',
+    'AzureFiles': 'StorageAzureFiles',
+    'Storage': 'StorageAccount',
+    'Queue': 'StorageQueue',
+    'StorageBlob': 'BlobBlock',
+    
+    # Monitoring aliases
+    'ApplicationInsights': 'ApplicationInsight',
+    'AppInsights': 'ApplicationInsight',
+    'Insights': 'ApplicationInsight',
+    'AzureMonitor': 'Monitor',
+    'LogAnalytics': 'LogAnalyticsWorkspaces',
+    'Logs': 'LogAnalyticsWorkspaces',
+    'ActivityLogs': 'ActivityLog',
+    
+    # Compute aliases
+    'VM': 'VirtualMachine',
+    'VMs': 'VirtualMachine',
+    'AKS': 'KubernetesServices',
+    'Kubernetes': 'KubernetesServices',
+    'K8s': 'KubernetesServices',
+    'WebApp': 'AppService',
+    'App': 'AppService',
+    'Functions': 'FunctionApp',
+    'Function': 'FunctionApp',
+    'AzureFunctions': 'FunctionApp',
+    'ContainerInstance': 'ContainerInstance',
+    'ACI': 'ContainerInstance',
+    'ACR': 'ContainerRegistry',
+    'ContainerRegistries': 'ContainerRegistry',
+    
+    # Database aliases
+    'SQL': 'AzureSQL',
+    'SQLDatabase': 'AzureSQL',
+    'SQLDB': 'AzureSQL',
+    'Cosmos': 'AzureCosmosDB',
+    'CosmosDB': 'AzureCosmosDB',
+    'Redis': 'CacheRedis',
+    'RedisCache': 'CacheRedis',
+    'Cache': 'CacheRedis',
+    'MySQL': 'AzureDatabaseMySQLServer',
+    'PostgreSQL': 'AzureDatabasePostgreSQLServer',
+    'Postgres': 'AzureDatabasePostgreSQLServer',
+    
+    # Network aliases  
+    'FrontDoor': 'FrontDoor',
+    'AFD': 'FrontDoor',
+    'CDN': 'CDNProfile',
+    'AzureCDN': 'CDNProfile',
+    'DNS': 'AzureDns',
+    'DNSZone': 'DNSZone',
+    'WAF': 'WebApplicationFirewallPoliciesWAF',
+    'Firewall': 'AzureFirewall',
+    'VNet': 'VirtualNetwork',
+    'VNET': 'VirtualNetwork',
+    'VirtualNetwork': 'VirtualNetwork',
+    'LoadBalancer': 'LoadBalancers',
+    'LB': 'LoadBalancers',
+    'AppGateway': 'ApplicationGateway',
+    'AGW': 'ApplicationGateway',
+    'TrafficManager': 'TrafficManager',
+    'VPN': 'VPNGateway',
+    'ExpressRoute': 'ExpressRouteCircuit',
+    'Bastion': 'Bastion',
+    'PrivateLink': 'PrivateLink',
+    'PrivateEndpoint': 'PrivateEndpoints',
+    'NSG': 'NetworkSecurityGroups',
+    
+    # Identity aliases
+    'AAD': 'AzureActiveDirectory',
+    'AzureAD': 'AzureActiveDirectory',
+    'EntraID': 'AzureActiveDirectory',
+    'ActiveDirectory': 'AzureActiveDirectory',
+    'ManagedIdentity': 'ManagedIdentities',
+    'Identity': 'ManagedIdentities',
+    
+    # Messaging aliases
+    'ServiceBus': 'ServiceBus',
+    'EventHub': 'EventHub',
+    'EventHubs': 'EventHub',
+    'EventGrid': 'EventGrid',
+    'SignalR': 'SignalR',
+    
+    # AI/ML aliases
+    'OpenAI': 'AzureOpenAI',
+    'CognitiveServices': 'CognitiveServices',
+    'AIServices': 'CognitiveServices',
+    'MachineLearning': 'MachineLearning',
+    'ML': 'MachineLearning',
+    'BotService': 'BotService',
+    'Bot': 'BotService',
+    'Search': 'AzureCognitiveSearch',
+    'AzureSearch': 'AzureCognitiveSearch',
+    'CognitiveSearch': 'AzureCognitiveSearch',
+    
+    # Security aliases
+    'KeyVault': 'KeyVault',
+    'Vault': 'KeyVault',
+    'Defender': 'MicrosoftDefenderForCloud',
+    'SecurityCenter': 'MicrosoftDefenderForCloud',
+    'Sentinel': 'Sentinel',
+    
+    # DevOps aliases
+    'DevOps': 'AzureDevOps',
+    'Pipelines': 'AzurePipelines',
+    'Repos': 'AzureRepos',
+    'Artifacts': 'AzureArtifacts',
+    
+    # General aliases
+    'Internet': 'Globe',
+    'Web': 'Globe',
+    'User': 'User',
+    'Users': 'Users',
+    'Client': 'User',
+    'ResourceGroup': 'ResourceGroup',
+    'RG': 'ResourceGroup',
+    'Subscription': 'Subscription',
+}
+
 
 def get_shape_info(resource_type: str) -> Tuple[str, str, str]:
     """
@@ -813,9 +976,13 @@ def get_shape_info(resource_type: str) -> Tuple[str, str, str]:
     Returns: (display_name, category, style_string)
     
     Uses Draw.io's built-in Azure2 SVG icons for all resources.
+    Supports aliases for common/intuitive names (e.g., 'SQL' -> 'AzureSQL').
     """
-    if resource_type in AZURE_SHAPES:
-        display_name, category, icon_path = AZURE_SHAPES[resource_type]
+    # First, check if this is an alias and resolve it
+    resolved_type = RESOURCE_TYPE_ALIASES.get(resource_type, resource_type)
+    
+    if resolved_type in AZURE_SHAPES:
+        display_name, category, icon_path = AZURE_SHAPES[resolved_type]
         
         if icon_path:
             # Use Draw.io Azure2 icon library
