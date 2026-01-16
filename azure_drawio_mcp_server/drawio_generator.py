@@ -842,10 +842,11 @@ async def generate_drawio_diagram(
             edge.rounded = 1  # Enable rounded corners for cleaner routing
             
             # Apply line pattern for dashed/dotted styles
+            # drawpyo uses: solid, dashed_small/medium/large, dotted_small/medium/large
             if conn.style == 'dashed':
-                edge.pattern = 'dashed'
+                edge.pattern = 'dashed_medium'
             elif conn.style == 'dotted':
-                edge.pattern = 'dotted'
+                edge.pattern = 'dotted_medium'
         
         # Create legend if requested - placed on "second A4 page" below main diagram
         if request.show_legend and len(request.resources) > 0:

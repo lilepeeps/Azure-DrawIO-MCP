@@ -42,10 +42,26 @@ Generate **editable** Azure architecture diagrams in Draw.io format using an MCP
 - Generates Azure architecture diagrams as `.drawio` files
 - Uses **official Azure icons** from Draw.io's Azure2 SVG library
 - Supports 100+ Azure resource types (VMs, App Services, AKS, SQL, etc.)
-- Auto-layouts resources with optional manual positioning
+- Auto-layouts resources in topology order (sources → sinks)
 - Groups resources into styled clusters (resource groups, VNets, subnets)
 - Creates connections with labels and different line styles (solid, dashed, dotted)
 - **Auto-opens diagrams** in VS Code after generation
+
+### Fully Editable Output
+
+Unlike PNG generators, **the diagram is just a starting point** — customize it however you like:
+
+- **Drag icons** to reposition — connections auto-route
+- **Resize groups** by dragging edges
+- **Add labels** by double-clicking connections
+- **Copy/paste** icons and groups between diagrams
+- **Export** to PNG, SVG, or PDF when done
+
+### Example Output
+
+![Example AKS Architecture Diagram](docs/example-aks-architecture.png)
+
+*Generated from a simple prompt: "AKS cluster with Application Gateway, Container Registry, Key Vault, and SQL Database"*
 
 ## Requirements
 
