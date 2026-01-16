@@ -307,10 +307,21 @@ pip install -r requirements.txt
 After configuration, test the MCP server with the following prompt:
 
 ```
-Use #azure-draw.io-mcp-server to generate an Azure diagram with a Function App, Storage Account, and Cosmos DB
+Generate an enterprise Azure architecture diagram with:
+- Users connecting to Front Door
+- Front Door routing to API Management
+- API Management connecting to Application Gateway and Service Bus
+- Application Gateway load balancing to an AKS Cluster
+- Service Bus triggering a Function App
+- AKS and Function App both storing data in Cosmos DB
+- Function App writing blobs to Storage Account
+- Both AKS and Function App retrieving secrets from Key Vault
+- Both AKS and Function App sending telemetry to Application Insights
 ```
 
 The diagram should be created in your workspace's `diagrams/` folder and open in VS Code.
+
+> **⚠️ Important:** When specifying resource types, use the exact `resource_type` values from the `list_azure_shapes` tool. For example, use `AzureCosmosDB` (not `CosmosDB`), `FunctionApp`, and `StorageAccount`. The tool supports aliases, but exact types ensure correct icon rendering.
 
 ---
 
@@ -345,27 +356,49 @@ The prompt file (`.github/prompts/generate-architecture.prompt.md`) tells Copilo
 
 ### 📝 Method 3: Structured JSON Specification
 
-For precise control, provide a full specification:
+For precise control, provide a full specification. Here's an enterprise architecture example:
 
 ```json
 {
-  "title": "E-Commerce Platform",
+  "title": "Enterprise Azure Architecture",
   "resources": [
-    {"id": "fd", "resource_type": "FrontDoor", "name": "Front Door", "group": "network"},
-    {"id": "app", "resource_type": "WebApp", "name": "Web App", "group": "compute"},
-    {"id": "sql", "resource_type": "SQL", "name": "SQL Database", "group": "data"}
-  ],
-  "groups": [
-    {"id": "network", "name": "Network"},
-    {"id": "compute", "name": "Compute"},
-    {"id": "data", "name": "Data"}
+    {"id": "users", "name": "Users", "resource_type": "User", "x": 100, "y": 300},
+    {"id": "frontdoor", "name": "Front Door", "resource_type": "FrontDoor", "x": 250, "y": 300},
+    {"id": "apim", "name": "API Management", "resource_type": "APIManagementService", "x": 400, "y": 300},
+    {"id": "appgw", "name": "Application Gateway", "resource_type": "ApplicationGateway", "x": 550, "y": 200},
+    {"id": "aks", "name": "AKS Cluster", "resource_type": "KubernetesServices", "x": 700, "y": 200},
+    {"id": "funcapp", "name": "Function App", "resource_type": "FunctionApp", "x": 700, "y": 400},
+    {"id": "cosmos", "name": "Cosmos DB", "resource_type": "AzureCosmosDB", "x": 900, "y": 200},
+    {"id": "storage", "name": "Storage Account", "resource_type": "StorageAccount", "x": 900, "y": 400},
+    {"id": "keyvault", "name": "Key Vault", "resource_type": "KeyVault", "x": 550, "y": 500},
+    {"id": "appinsights", "name": "App Insights", "resource_type": "ManagementgovernanceApplicationInsight", "x": 700, "y": 600},
+    {"id": "servicebus", "name": "Service Bus", "resource_type": "ServiceBus", "x": 550, "y": 400}
   ],
   "connections": [
-    {"source": "fd", "target": "app"},
-    {"source": "app", "target": "sql"}
-  ]
+    {"label": "HTTPS", "source": "users", "target": "frontdoor"},
+    {"label": "Route", "source": "frontdoor", "target": "apim"},
+    {"label": "API Calls", "source": "apim", "target": "appgw"},
+    {"label": "Async", "source": "apim", "target": "servicebus"},
+    {"label": "Load Balance", "source": "appgw", "target": "aks"},
+    {"label": "Trigger", "source": "servicebus", "target": "funcapp"},
+    {"label": "Data", "source": "aks", "target": "cosmos"},
+    {"label": "Blob", "source": "funcapp", "target": "storage"},
+    {"label": "Data", "source": "funcapp", "target": "cosmos"},
+    {"label": "Secrets", "source": "aks", "target": "keyvault"},
+    {"label": "Secrets", "source": "funcapp", "target": "keyvault"},
+    {"label": "Telemetry", "source": "aks", "target": "appinsights"},
+    {"label": "Telemetry", "source": "funcapp", "target": "appinsights"}
+  ],
+  "groups": [
+    {"id": "networking", "name": "Networking"},
+    {"id": "compute", "name": "Compute"},
+    {"id": "data", "name": "Data Services"}
+  ],
+  "open_in_vscode": true
 }
 ```
+
+> **💡 Tip:** Use `list_azure_shapes` to discover available resource types. For example, Cosmos DB is `AzureCosmosDB`, not `CosmosDB`.
 
 ---
 
@@ -381,18 +414,26 @@ The MCP server validates your input and provides guidance:
 | **Naming** | Use clear, short names — they appear as labels |
 | **Size** | Keep diagrams under 15-20 resources for clarity |
 
-### Common Resource Type Aliases
+### Common Resource Types
 
-| Type | Alias Options |
-|------|---------------|
-| Azure SQL | `SQL`, `SQLDatabase`, `SQLDB`, `AzureSQL` |
-| Cosmos DB | `Cosmos`, `CosmosDB`, `AzureCosmosDB` |
-| Kubernetes | `AKS`, `Kubernetes`, `K8s`, `KubernetesServices` |
-| Functions | `Functions`, `Function`, `FunctionApp`, `AzureFunctions` |
-| App Service | `WebApp`, `App`, `AppService` |
-| Storage | `BlobStorage`, `Blob`, `FileStorage`, `Files`, `Storage` |
-| Key Vault | `KeyVault`, `Vault` |
-| Redis | `Redis`, `RedisCache`, `Cache`, `CacheRedis` |
+> **⚠️ Use exact resource types** from `list_azure_shapes` for reliable icon rendering. Aliases may work but exact types are guaranteed.
+
+| Resource | Exact Type | Aliases (may work) |
+|----------|------------|-------------------|
+| Cosmos DB | **`AzureCosmosDB`** | `Cosmos`, `CosmosDB` |
+| Azure SQL | **`AzureSQL`** | `SQL`, `SQLDatabase`, `SQLDB` |
+| Kubernetes | **`KubernetesServices`** | `AKS`, `Kubernetes`, `K8s` |
+| Function App | **`FunctionApp`** | `Functions`, `Function`, `AzureFunctions` |
+| App Service | **`AppService`** | `WebApp`, `App` |
+| Storage Account | **`StorageAccount`** | `BlobStorage`, `Blob`, `Storage` |
+| Key Vault | **`KeyVault`** | `Vault` |
+| Redis Cache | **`CacheRedis`** | `Redis`, `RedisCache`, `Cache` |
+| API Management | **`APIManagementService`** | `APIM` |
+| App Insights | **`ManagementgovernanceApplicationInsight`** | `AppInsights` |
+| Service Bus | **`ServiceBus`** | - |
+| Front Door | **`FrontDoor`** | - |
+| Application Gateway | **`ApplicationGateway`** | `AppGateway` |
+| Users | **`User`** | - |
 
 ---
 
