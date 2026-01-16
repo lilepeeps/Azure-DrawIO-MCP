@@ -6,6 +6,8 @@
 
 Generate **editable** Azure architecture diagrams in Draw.io format using an MCP server.
 
+> **What's an MCP Server?** Think of it as a plugin for AI assistants like GitHub Copilot or Claude. Once configured, you can simply ask "draw me an Azure architecture diagram" and it generates one for you.
+
 > **Attribution**: This project is inspired by [dminkovski/azure-diagram-mcp](https://github.com/dminkovski/azure-diagram-mcp) which generates PNG diagrams using the Python `diagrams` package. This version outputs editable `.drawio` files instead.
 
 ## Table of Contents
@@ -42,8 +44,8 @@ Generate **editable** Azure architecture diagrams in Draw.io format using an MCP
 - Generates Azure architecture diagrams as `.drawio` files
 - Uses **official Azure icons** from Draw.io's Azure2 SVG library
 - Supports 100+ Azure resource types (VMs, App Services, AKS, SQL, etc.)
-- Auto-layouts resources in topology order (sources → sinks)
-- Groups resources into styled clusters (resource groups, VNets, subnets)
+- Auto-layouts resources left-to-right (data sources on left, destinations on right)
+- Groups resources into visual clusters (resource groups, VNets, subnets)
 - Creates connections with labels and different line styles (solid, dashed, dotted)
 - **Auto-opens diagrams** in VS Code after generation
 
@@ -65,6 +67,8 @@ Unlike PNG generators, **the diagram is just a starting point** — customize it
 
 ## Requirements
 
+**At a Glance:** Python 3.10+, VS Code with the Draw.io extension, and one of: Docker OR the `uv` package manager.
+
 ### Required
 
 | Component | Version | Installation |
@@ -82,6 +86,14 @@ Unlike PNG generators, **the diagram is just a starting point** — customize it
 ## Quick Start
 
 Choose one of three installation methods:
+
+| Option | Best For | What You Need |
+|--------|----------|---------------|
+| **A: Docker** | Multiple projects, consistent environment | Docker Desktop |
+| **B: GitHub Install** | Quickest single setup | Python + `uv` package manager |
+| **C: Local Python** | Development/contributions | Python + pip |
+
+> **🤔 Not sure?** Use **Option A (Docker)** if you have Docker installed, or **Option B** if you don't. Option C is mainly for developers who want to modify this project.
 
 > **💡 Tip:** This project includes a [dev container](.devcontainer/devcontainer.json) for instant setup - just open in VS Code and select "Reopen in Container".
 
@@ -161,7 +173,7 @@ docker build -t azure-drawio-mcp:latest .
 
 **1. Install Prerequisites:**
 - Python 3.10+
-- `uv` package manager: `pip install uv` or `winget install astral-sh.uv`
+- `uv` package manager (a fast Python tool runner): `pip install uv` or `winget install astral-sh.uv`
 - VS Code Draw.io Extension: `code --install-extension hediet.vscode-drawio`
 
 **2. Configure MCP Client:**
@@ -319,13 +331,17 @@ The AI will interpret your request and call the MCP server with the appropriate 
 
 ### 📂 Method 2: Scan Existing Repository
 
-Point the server at your infrastructure code to auto-discover resources:
+Already have Azure infrastructure in your project (Bicep, Terraform, ARM templates)? Use the included prompt file to help Copilot discover your resources:
 
-```
-Scan my workspace and generate an Azure architecture diagram based on my infrastructure code
-```
+**How to use it:**
+1. Open GitHub Copilot chat in VS Code
+2. Click the 📎 attachment icon
+3. Select **Prompts → generate-architecture**
+4. Ask: *"Analyze my infrastructure code and generate a diagram"*
 
-This scans for Bicep, Terraform, ARM templates, and Azure SDK usage patterns.
+The prompt file (`.github/prompts/generate-architecture.prompt.md`) tells Copilot what to look for and how to call the diagram generator.
+
+> **💡 Why a prompt file?** GitHub Copilot already understands your code semantically — the prompt file just guides it to focus on Azure resources and call the right MCP tools.
 
 ### 📝 Method 3: Structured JSON Specification
 
@@ -398,26 +414,11 @@ The layout is designed for **A4 landscape** export.
 
 ## MCP Tools
 
-### `scan_workspace` ⭐ NEW
-
-Automatically scans your codebase to discover Azure resources and generate a diagram.
-
-**Scans for:**
-- Bicep files (`*.bicep`)
-- Terraform files (`*.tf`)
-- ARM templates (`*.json` with ARM schema)
-- Azure SDK usage (`*.cs`, `*.py`, `*.js`, `*.ts`)
-
-**Parameters:**
-- `workspace_dir` (required): Path to scan
-- `generate_diagram`: Auto-generate diagram (default: true)
-- `filename`: Output filename
-- `open_in_vscode`: Open in VS Code after generation
-
-**Example prompt:**
-```
-Scan my project at C:/Projects/my-azure-app and create an architecture diagram
-```
+| Tool | Purpose | When to Use |
+|------|---------|-------------|
+| `generate_diagram` | Create diagram from structured spec | Full control over resources, groups, connections |
+| `list_azure_shapes` | Browse available Azure icons | Find the right `resource_type` value |
+| `get_diagram_examples` | Get template specifications | Starting point for common architectures |
 
 ### `generate_diagram`
 
@@ -476,6 +477,22 @@ Returns example diagram specifications you can use as templates.
 
 **Types:** `azure`, `network`, `compute`, `data`, `integration`, `security`, `all`
 
+---
+
+### Optional: `scan_workspace`
+
+> **Note:** For GitHub Copilot users, the [prompt file approach](#-method-2-scan-existing-repository-prompt-file) is recommended. Copilot's semantic understanding is more accurate than regex-based scanning.
+
+For non-Copilot MCP clients (Claude Desktop standalone, etc.), `scan_workspace` provides basic resource discovery:
+
+**Parameters:**
+- `workspace_dir` (required): Path to scan
+- `generate_diagram`: Auto-generate diagram (default: true)
+- `filename`: Output filename
+- `open_in_vscode`: Open in VS Code after generation
+
+**Scans for:** Bicep (`*.bicep`), Terraform (`*.tf`), ARM templates, Azure SDK usage patterns.
+
 ## Opening Generated Diagrams
 
 ### Automatic Opening (Recommended)
@@ -513,13 +530,16 @@ Private Endpoints, and Microsoft Sentinel for monitoring
 
 ```
 azure-drawio-mcp/
+├── .github/
+│   └── prompts/
+│       └── generate-architecture.prompt.md  # Prompt for codebase scanning
 ├── azure_drawio_mcp_server/
 │   ├── __init__.py           # Package initialization
-│   ├── server.py             # FastMCP server with tool definitions
-│   ├── drawio_generator.py   # Draw.io file generation using drawpyo
+│   ├── server.py             # MCP server that handles AI assistant requests
+│   ├── drawio_generator.py   # Creates .drawio files using drawpyo library
 │   ├── azure_shapes.py       # Azure resource type mappings and styles
-│   ├── scanner.py            # Workspace scanner for auto-discovery
-│   └── models.py             # Pydantic request/response models
+│   ├── scanner.py            # Workspace scanner (optional)
+│   └── models.py             # Data models for requests/responses
 ├── diagrams/                 # Generated diagram output directory
 ├── .dockerignore             # Docker build exclusions
 ├── Dockerfile                # Container image definition
@@ -531,9 +551,11 @@ azure-drawio-mcp/
 
 ## Dependencies
 
-- **drawpyo**: Python library for generating Draw.io files
-- **mcp[cli]**: Model Context Protocol SDK
-- **pydantic**: Data validation and serialization
+This project uses three Python libraries (installed automatically):
+
+- **drawpyo**: Creates Draw.io files programmatically
+- **mcp[cli]**: Enables communication with AI assistants
+- **pydantic**: Handles data validation
 
 No Graphviz installation required! 🎉
 
