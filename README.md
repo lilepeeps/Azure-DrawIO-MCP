@@ -61,7 +61,7 @@ Unlike PNG generators, **the diagram is just a starting point** — customize it
 
 ### Example Output
 
-![Example AKS Architecture Diagram](docs/example-aks-architecture.png)
+![Example AKS Architecture Diagram](docs/Example-AKS-Architecture.png)
 
 *Generated from a simple prompt: "AKS cluster with Application Gateway, Container Registry, Key Vault, and SQL Database"*
 
