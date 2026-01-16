@@ -1,0 +1,74 @@
+{
+  // ================================================================
+  // Azure Draw.io MCP Server - VS Code Configuration Sample
+  // ================================================================
+  //
+  // SETUP INSTRUCTIONS:
+  // 1. Copy this file to .vscode/mcp.json in your project
+  // 2. Choose ONE option below and uncomment it
+  // 3. Update any paths as needed for your system
+  //
+  // RECOMMENDED FOR BEGINNERS: Option B (uvx)
+  //   - Only requires Python 3.10+ and uv package manager
+  //   - No cloning or Docker needed
+  //   - Install uv: pip install uv (or: winget install astral-sh.uv)
+  //
+  // ================================================================
+
+  "servers": {
+
+    // ============================================================
+    // OPTION A: Docker
+    // ============================================================
+    // Best for: Multi-project use, consistent environments
+    // Prerequisites:
+    //   - Docker Desktop installed
+    //   - Build image first: docker build -t azure-drawio-mcp:latest .
+    //
+    // "azure-drawio": {
+    //   "type": "stdio",
+    //   "command": "docker",
+    //   "args": [
+    //     "run", "--rm", "-i",
+    //     "-v", "${workspaceFolder}:/workspace",
+    //     "-e", "WORKSPACE_MOUNT=/workspace",
+    //     "azure-drawio-mcp:latest"
+    //   ]
+    // }
+
+    // ============================================================
+    // OPTION B: uvx from GitHub (RECOMMENDED FOR BEGINNERS)
+    // ============================================================
+    // Best for: Quick setup, no cloning required
+    // Prerequisites:
+    //   - Python 3.10+
+    //   - uv package manager (pip install uv)
+    //
+    // "azure-drawio": {
+    //   "type": "stdio",
+    //   "command": "uvx",
+    //   "args": [
+    //     "--from",
+    //     "git+https://github.com/lilepeeps/Azure-DrawIO-MCP.git",
+    //     "azure-drawio-mcp"
+    //   ]
+    // }
+
+    // ============================================================
+    // OPTION C: Local Python installation
+    // ============================================================
+    // Best for: Development, customization
+    // Prerequisites:
+    //   - Python 3.10+
+    //   - Clone the repo and run: pip install -r requirements.txt
+    //   - Update "cwd" below to your cloned repo path
+    //
+    // "azure-drawio": {
+    //   "type": "stdio",
+    //   "command": "python",
+    //   "args": ["-m", "azure_drawio_mcp_server.server"],
+    //   "cwd": "C:/path/to/Azure-DrawIO-MCP"
+    // }
+
+  }
+}
