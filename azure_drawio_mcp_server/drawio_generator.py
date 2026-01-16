@@ -29,6 +29,9 @@ from azure_drawio_mcp_server.azure_shapes import (
     AZURE_COLORS,
     AZURE_SHAPES,
 )
+from azure_drawio_mcp_server.topology_layout import (
+    calculate_topology_layout,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -106,11 +109,18 @@ def _open_in_vscode(file_path: str) -> bool:
 
 def _calculate_layout(
     resources: List[AzureResource],
-    groups: List[ResourceGroup]
+    groups: List[ResourceGroup],
+    connections: Optional[List[Connection]] = None,
 ) -> Tuple[Dict[str, Tuple[int, int]], Dict[str, Tuple[int, int, int, int]]]:
     """
     Calculate positions for resources and bounds for groups.
-    Creates a COMPACT layout constrained to A4 paper size (landscape).
+    Creates a CLEAN layout constrained to A4 paper size (landscape).
+    
+    Philosophy: Generate a good starting point that's easy to adjust.
+    Users can drag icons in Draw.io to fine-tune the layout.
+    
+    If connections are provided, uses topology-aware ordering to place
+    source resources/groups first (left) and sink resources/groups last (right).
     
     Returns:
         - positions: Dict mapping resource ID to (x, y) position
@@ -121,7 +131,21 @@ def _calculate_layout(
     positions: Dict[str, Tuple[int, int]] = {}
     group_bounds: Dict[str, Tuple[int, int, int, int]] = {}
     
-    # Separate resources by group
+    # Use topology-aware ordering if connections provided
+    if connections:
+        ordered_groups, group_resources, _ = calculate_topology_layout(
+            resources, groups, connections
+        )
+    else:
+        ordered_groups = groups
+        group_resources = {}
+        for r in resources:
+            if r.group not in group_resources:
+                group_resources[r.group] = []
+            group_resources[r.group].append(r)
+    
+    
+    # Separate resources by group (using topology order if available)
     grouped: Dict[Optional[str], List[AzureResource]] = {}
     for resource in resources:
         group_id = resource.group
@@ -134,9 +158,10 @@ def _calculate_layout(
     row_max_height = 0
     
     # Position ungrouped resources first (inline, left to right)
-    if None in grouped:
-        ungrouped = grouped[None]
-        for i, resource in enumerate(ungrouped):
+    # Use topology-ordered ungrouped resources if available
+    ungrouped_resources = group_resources.get(None, grouped.get(None, []))
+    if ungrouped_resources:
+        for i, resource in enumerate(ungrouped_resources):
             if resource.x is not None and resource.y is not None:
                 positions[resource.id] = (resource.x, resource.y)
             else:
@@ -155,20 +180,21 @@ def _calculate_layout(
         row_max_height = 0
     
     # Position groups and their resources HORIZONTALLY (left to right)
-    # Wrap to new rows when hitting A4 width boundary
-    for group in groups:
-        if group.id not in grouped:
+    # Uses topology-ordered groups: sources on left, sinks on right
+    # Simple grid layout within groups - easy for users to adjust
+    for group in ordered_groups:
+        # Get topology-ordered resources for this group
+        grp_resources = group_resources.get(group.id, grouped.get(group.id, []))
+        if not grp_resources:
             continue
             
-        group_resources = grouped[group.id]
-        num_resources = len(group_resources)
+        num_resources = len(grp_resources)
         
-        # Layout resources in a horizontal row inside the group
-        # For groups with many resources, allow multiple rows
-        cols = min(4, num_resources)  # Max 4 icons per row in a group
+        # Simple grid layout - resources flow left to right, then wrap
+        # More generous spacing for easier manual adjustment
+        cols = min(3, num_resources)  # Max 3 icons per row for cleaner look
         rows = (num_resources + cols - 1) // cols
         
-        # Calculate compact group dimensions
         content_width = cols * ICON_CELL_WIDTH
         content_height = rows * ICON_CELL_HEIGHT
         
@@ -177,13 +203,13 @@ def _calculate_layout(
         
         # Check if group fits on current row (respect A4 width)
         if current_x + group_width > CANVAS_WIDTH + PAGE_MARGIN:
-            # Wrap to new row
             current_x = START_X
             current_y += row_max_height + GROUP_GAP
             row_max_height = 0
         
         # Position each resource RELATIVE to the group's origin
-        for i, resource in enumerate(group_resources):
+        # Resources are topology-ordered (sources first within group)
+        for i, resource in enumerate(grp_resources):
             if resource.x is not None and resource.y is not None:
                 positions[resource.id] = (resource.x, resource.y)
             else:
@@ -419,7 +445,12 @@ async def generate_drawio_diagram(
         page.height = A4_HEIGHT  # 794px (210mm)
         
         # Calculate layout for all resources and groups
-        positions, group_bounds = _calculate_layout(request.resources, request.groups)
+        # Uses topology-aware ordering when connections are provided
+        positions, group_bounds = _calculate_layout(
+            request.resources, 
+            request.groups,
+            request.connections,  # Enable topology-aware layout
+        )
         
         # Track created objects for edge connections
         objects: Dict[str, drawpyo_objects.Object] = {}

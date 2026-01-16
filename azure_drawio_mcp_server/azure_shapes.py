@@ -842,6 +842,132 @@ AZURE_SHAPES: Dict[str, Tuple[str, str, Optional[str]]] = {
 
 }
 
+# Alias mapping for common/intuitive names to actual AZURE_SHAPES keys
+# This helps when users type natural names that don't match exactly
+RESOURCE_TYPE_ALIASES: Dict[str, str] = {
+    # Storage aliases
+    'BlobStorage': 'BlobBlock',
+    'Blob': 'BlobBlock',
+    'FileStorage': 'StorageAzureFiles',
+    'Files': 'StorageAzureFiles',
+    'AzureFiles': 'StorageAzureFiles',
+    'Storage': 'StorageAccount',
+    'Queue': 'StorageQueue',
+    'StorageBlob': 'BlobBlock',
+    
+    # Monitoring aliases
+    'ApplicationInsights': 'ApplicationInsight',
+    'AppInsights': 'ApplicationInsight',
+    'Insights': 'ApplicationInsight',
+    'AzureMonitor': 'Monitor',
+    'LogAnalytics': 'LogAnalyticsWorkspaces',
+    'Logs': 'LogAnalyticsWorkspaces',
+    'ActivityLogs': 'ActivityLog',
+    
+    # Compute aliases
+    'VM': 'VirtualMachine',
+    'VMs': 'VirtualMachine',
+    'AKS': 'KubernetesServices',
+    'Kubernetes': 'KubernetesServices',
+    'K8s': 'KubernetesServices',
+    'WebApp': 'AppService',
+    'App': 'AppService',
+    'Functions': 'FunctionApp',
+    'Function': 'FunctionApp',
+    'AzureFunctions': 'FunctionApp',
+    'ContainerInstance': 'ContainerInstance',
+    'ACI': 'ContainerInstance',
+    'ACR': 'ContainerRegistry',
+    'ContainerRegistries': 'ContainerRegistry',
+    
+    # Database aliases
+    'SQL': 'AzureSQL',
+    'SQLDatabase': 'AzureSQL',
+    'SQLDB': 'AzureSQL',
+    'Cosmos': 'AzureCosmosDB',
+    'CosmosDB': 'AzureCosmosDB',
+    'Redis': 'CacheRedis',
+    'RedisCache': 'CacheRedis',
+    'Cache': 'CacheRedis',
+    'MySQL': 'AzureDatabaseMySQLServer',
+    'PostgreSQL': 'AzureDatabasePostgreSQLServer',
+    'Postgres': 'AzureDatabasePostgreSQLServer',
+    
+    # Network aliases  
+    'FrontDoor': 'FrontDoor',
+    'AFD': 'FrontDoor',
+    'CDN': 'CDNProfile',
+    'AzureCDN': 'CDNProfile',
+    'DNS': 'AzureDns',
+    'DNSZone': 'DNSZone',
+    'WAF': 'WebApplicationFirewallPoliciesWAF',
+    'Firewall': 'AzureFirewall',
+    'VNet': 'VirtualNetwork',
+    'VNET': 'VirtualNetwork',
+    'VirtualNetwork': 'VirtualNetwork',
+    'LoadBalancer': 'LoadBalancers',
+    'LB': 'LoadBalancers',
+    'AppGateway': 'ApplicationGateway',
+    'AGW': 'ApplicationGateway',
+    'TrafficManager': 'TrafficManager',
+    'VPN': 'VPNGateway',
+    'ExpressRoute': 'ExpressRouteCircuit',
+    'Bastion': 'Bastion',
+    'PrivateLink': 'PrivateLink',
+    'PrivateEndpoint': 'PrivateEndpoints',
+    'NSG': 'NetworkSecurityGroups',
+    
+    # Identity aliases
+    'AAD': 'AzureActiveDirectory',
+    'AzureAD': 'AzureActiveDirectory',
+    'EntraID': 'AzureActiveDirectory',
+    'ActiveDirectory': 'AzureActiveDirectory',
+    'ManagedIdentity': 'ManagedIdentities',
+    'Identity': 'ManagedIdentities',
+    
+    # Messaging aliases
+    'ServiceBus': 'ServiceBus',
+    'EventHub': 'EventHub',
+    'EventHubs': 'EventHub',
+    'EventGrid': 'EventGrid',
+    'SignalR': 'SignalR',
+    
+    # AI/ML aliases
+    'OpenAI': 'AzureOpenAI',
+    'CognitiveServices': 'CognitiveServices',
+    'AIServices': 'CognitiveServices',
+    'MachineLearning': 'MachineLearning',
+    'ML': 'MachineLearning',
+    'BotService': 'BotService',
+    'Bot': 'BotService',
+    'Search': 'AzureCognitiveSearch',
+    'AzureSearch': 'AzureCognitiveSearch',
+    'CognitiveSearch': 'AzureCognitiveSearch',
+    
+    # Security aliases
+    'KeyVault': 'KeyVault',
+    'Vault': 'KeyVault',
+    'Defender': 'MicrosoftDefenderForCloud',
+    'SecurityCenter': 'MicrosoftDefenderForCloud',
+    'Sentinel': 'Sentinel',
+    
+    # DevOps aliases
+    'DevOps': 'AzureDevOps',
+    'Pipelines': 'AzurePipelines',
+    'Repos': 'AzureRepos',
+    'Artifacts': 'AzureArtifacts',
+    
+    # General aliases
+    'Internet': 'Globe',
+    'Web': 'Globe',
+    'User': 'User',
+    'Users': 'Users',
+    'Client': 'User',
+    'ResourceGroup': 'ResourceGroup',
+    'RG': 'ResourceGroup',
+    'Subscription': 'Subscription',
+}
+
 
 def get_shape_info(resource_type: str) -> Tuple[str, str, str]:
     """
@@ -850,9 +976,13 @@ def get_shape_info(resource_type: str) -> Tuple[str, str, str]:
     Returns: (display_name, category, style_string)
     
     Uses Draw.io's built-in Azure2 SVG icons for all resources.
+    Supports aliases for common/intuitive names (e.g., 'SQL' -> 'AzureSQL').
     """
-    if resource_type in AZURE_SHAPES:
-        display_name, category, icon_path = AZURE_SHAPES[resource_type]
+    # First, check if this is an alias and resolve it
+    resolved_type = RESOURCE_TYPE_ALIASES.get(resource_type, resource_type)
+    
+    if resolved_type in AZURE_SHAPES:
+        display_name, category, icon_path = AZURE_SHAPES[resolved_type]
         
         if icon_path:
             # Use Draw.io Azure2 icon library
