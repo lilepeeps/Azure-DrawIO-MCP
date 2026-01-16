@@ -39,6 +39,14 @@ BENEFITS OVER PNG DIAGRAMS:
 - VS Code integration: Open directly in VS Code with Draw.io extension
 - Export options: Export to PNG, SVG, PDF from Draw.io
 
+BEST PRACTICES - FOLLOW THESE FOR CONSISTENT DIAGRAMS:
+1. DO NOT specify x/y coordinates on resources - let the auto-layout engine position them
+2. DO NOT use 'style' on connections (no dashed/dotted) - causes errors, use solid lines only
+3. ALWAYS include 'rationale' on every resource - this populates the legend with meaningful descriptions
+4. ALWAYS use 'groups' to organize resources logically (compute, data, security, etc.)
+5. ALWAYS use valid resource_type values from list_azure_shapes tool
+6. ALWAYS provide workspace_dir so diagrams save to the user's project
+
 WORKFLOW:
 1. list_azure_shapes:
    - Discover all available Azure resource types
@@ -52,10 +60,11 @@ WORKFLOW:
 
 3. generate_diagram:
    - Provide a structured specification with resources and connections
-   - Specify resource types, names, and optional positions
-   - Group related resources into clusters
-   - The diagram is generated as a .drawio file
-   - IMPORTANT: Always provide workspace_dir to save diagrams in the user's current directory
+   - Let auto-layout position resources (do NOT specify x/y coordinates)
+   - Group related resources into clusters with meaningful colors
+   - Include rationale for each resource to populate the legend
+   - The diagram is generated as a .drawio file in A4 landscape format
+   - Output includes: instructions header, architecture diagram, and legend table
 
 OPENING THE DIAGRAM:
 - Install VS Code extension: hediet.vscode-drawio
@@ -176,11 +185,11 @@ async def mcp_get_diagram_examples(
         examples['azure_basic'] = {
             'title': 'Basic Azure Web Architecture',
             'resources': [
-                {'id': 'user', 'resource_type': 'User', 'name': 'Users'},
-                {'id': 'frontdoor', 'resource_type': 'FrontDoor', 'name': 'Azure Front Door'},
-                {'id': 'webapp', 'resource_type': 'AppService', 'name': 'Web App'},
-                {'id': 'sql', 'resource_type': 'SQLDatabase', 'name': 'Azure SQL'},
-                {'id': 'storage', 'resource_type': 'StorageAccount', 'name': 'Storage'},
+                {'id': 'user', 'resource_type': 'User', 'name': 'Users', 'rationale': 'End users accessing the application'},
+                {'id': 'frontdoor', 'resource_type': 'FrontDoor', 'name': 'Azure Front Door', 'rationale': 'Global load balancer and CDN'},
+                {'id': 'webapp', 'resource_type': 'AppService', 'name': 'Web App', 'rationale': 'Web application hosting'},
+                {'id': 'sql', 'resource_type': 'SQLDatabase', 'name': 'Azure SQL', 'rationale': 'Relational data storage'},
+                {'id': 'storage', 'resource_type': 'StorageAccount', 'name': 'Storage', 'rationale': 'Blob and file storage'},
             ],
             'connections': [
                 {'source': 'user', 'target': 'frontdoor'},
@@ -195,19 +204,19 @@ async def mcp_get_diagram_examples(
         examples['network_hub_spoke'] = {
             'title': 'Hub-Spoke Network Architecture',
             'resources': [
-                {'id': 'hub_vnet', 'resource_type': 'VNet', 'name': 'Hub VNet', 'group': 'hub'},
-                {'id': 'firewall', 'resource_type': 'Firewall', 'name': 'Azure Firewall', 'group': 'hub'},
-                {'id': 'bastion', 'resource_type': 'Bastion', 'name': 'Bastion', 'group': 'hub'},
-                {'id': 'spoke1_vnet', 'resource_type': 'VNet', 'name': 'Spoke 1 VNet', 'group': 'spoke1'},
-                {'id': 'spoke1_vm', 'resource_type': 'VM', 'name': 'Web Server', 'group': 'spoke1'},
-                {'id': 'spoke2_vnet', 'resource_type': 'VNet', 'name': 'Spoke 2 VNet', 'group': 'spoke2'},
-                {'id': 'spoke2_aks', 'resource_type': 'AKS', 'name': 'AKS Cluster', 'group': 'spoke2'},
+                {'id': 'hub_vnet', 'resource_type': 'VNet', 'name': 'Hub VNet', 'group': 'hub', 'rationale': 'Central hub for shared services'},
+                {'id': 'firewall', 'resource_type': 'Firewall', 'name': 'Azure Firewall', 'group': 'hub', 'rationale': 'Centralized network security'},
+                {'id': 'bastion', 'resource_type': 'Bastion', 'name': 'Bastion', 'group': 'hub', 'rationale': 'Secure VM access without public IPs'},
+                {'id': 'spoke1_vnet', 'resource_type': 'VNet', 'name': 'Spoke 1 VNet', 'group': 'spoke1', 'rationale': 'Isolated workload network'},
+                {'id': 'spoke1_vm', 'resource_type': 'VM', 'name': 'Web Server', 'group': 'spoke1', 'rationale': 'Web application hosting'},
+                {'id': 'spoke2_vnet', 'resource_type': 'VNet', 'name': 'Spoke 2 VNet', 'group': 'spoke2', 'rationale': 'Container workload network'},
+                {'id': 'spoke2_aks', 'resource_type': 'AKS', 'name': 'AKS Cluster', 'group': 'spoke2', 'rationale': 'Kubernetes container orchestration'},
             ],
             'connections': [
                 {'source': 'hub_vnet', 'target': 'spoke1_vnet', 'label': 'Peering'},
                 {'source': 'hub_vnet', 'target': 'spoke2_vnet', 'label': 'Peering'},
-                {'source': 'firewall', 'target': 'spoke1_vm', 'style': 'dashed'},
-                {'source': 'firewall', 'target': 'spoke2_aks', 'style': 'dashed'},
+                {'source': 'firewall', 'target': 'spoke1_vm'},
+                {'source': 'firewall', 'target': 'spoke2_aks'},
             ],
             'groups': [
                 {'id': 'hub', 'name': 'Hub Network', 'color': '#FFF3E0'},
@@ -221,16 +230,16 @@ async def mcp_get_diagram_examples(
         examples['compute_aks'] = {
             'title': 'AKS with Application Gateway',
             'resources': [
-                {'id': 'agw', 'resource_type': 'ApplicationGateway', 'name': 'App Gateway'},
-                {'id': 'aks', 'resource_type': 'AKS', 'name': 'AKS Cluster'},
-                {'id': 'acr', 'resource_type': 'ACR', 'name': 'Container Registry'},
-                {'id': 'kv', 'resource_type': 'KeyVault', 'name': 'Key Vault'},
-                {'id': 'sql', 'resource_type': 'SQLDatabase', 'name': 'Azure SQL'},
+                {'id': 'agw', 'resource_type': 'ApplicationGateway', 'name': 'App Gateway', 'rationale': 'Layer 7 load balancer with WAF'},
+                {'id': 'aks', 'resource_type': 'AKS', 'name': 'AKS Cluster', 'rationale': 'Kubernetes container orchestration'},
+                {'id': 'acr', 'resource_type': 'ACR', 'name': 'Container Registry', 'rationale': 'Private container image storage'},
+                {'id': 'kv', 'resource_type': 'KeyVault', 'name': 'Key Vault', 'rationale': 'Secrets and certificate management'},
+                {'id': 'sql', 'resource_type': 'SQLDatabase', 'name': 'Azure SQL', 'rationale': 'Relational data persistence'},
             ],
             'connections': [
                 {'source': 'agw', 'target': 'aks'},
                 {'source': 'aks', 'target': 'acr', 'label': 'Pull images'},
-                {'source': 'aks', 'target': 'kv', 'label': 'Secrets', 'style': 'dashed'},
+                {'source': 'aks', 'target': 'kv', 'label': 'Secrets'},
                 {'source': 'aks', 'target': 'sql', 'label': 'Data'},
             ],
         }
@@ -240,12 +249,12 @@ async def mcp_get_diagram_examples(
         examples['data_pipeline'] = {
             'title': 'Azure Data Pipeline',
             'resources': [
-                {'id': 'eventhub', 'resource_type': 'EventHub', 'name': 'Event Hubs'},
-                {'id': 'stream', 'resource_type': 'StreamAnalytics', 'name': 'Stream Analytics'},
-                {'id': 'datalake', 'resource_type': 'DataLake', 'name': 'Data Lake'},
-                {'id': 'adf', 'resource_type': 'DataFactory', 'name': 'Data Factory'},
-                {'id': 'synapse', 'resource_type': 'Synapse', 'name': 'Synapse Analytics'},
-                {'id': 'powerbi', 'resource_type': 'PowerBI', 'name': 'Power BI'},
+                {'id': 'eventhub', 'resource_type': 'EventHub', 'name': 'Event Hubs', 'rationale': 'Real-time event ingestion'},
+                {'id': 'stream', 'resource_type': 'StreamAnalytics', 'name': 'Stream Analytics', 'rationale': 'Real-time stream processing'},
+                {'id': 'datalake', 'resource_type': 'DataLake', 'name': 'Data Lake', 'rationale': 'Raw data storage'},
+                {'id': 'adf', 'resource_type': 'DataFactory', 'name': 'Data Factory', 'rationale': 'ETL orchestration'},
+                {'id': 'synapse', 'resource_type': 'Synapse', 'name': 'Synapse Analytics', 'rationale': 'Data warehousing and analytics'},
+                {'id': 'powerbi', 'resource_type': 'PowerBI', 'name': 'Power BI', 'rationale': 'Business intelligence reporting'},
             ],
             'connections': [
                 {'source': 'eventhub', 'target': 'stream'},
@@ -261,12 +270,12 @@ async def mcp_get_diagram_examples(
         examples['integration_serverless'] = {
             'title': 'Serverless Integration',
             'resources': [
-                {'id': 'apim', 'resource_type': 'APIM', 'name': 'API Management'},
-                {'id': 'func1', 'resource_type': 'FunctionApp', 'name': 'Order Function'},
-                {'id': 'func2', 'resource_type': 'FunctionApp', 'name': 'Notify Function'},
-                {'id': 'servicebus', 'resource_type': 'ServiceBus', 'name': 'Service Bus'},
-                {'id': 'logic', 'resource_type': 'LogicApp', 'name': 'Workflow'},
-                {'id': 'cosmos', 'resource_type': 'CosmosDB', 'name': 'Cosmos DB'},
+                {'id': 'apim', 'resource_type': 'APIM', 'name': 'API Management', 'rationale': 'API gateway and management'},
+                {'id': 'func1', 'resource_type': 'FunctionApp', 'name': 'Order Function', 'rationale': 'Order processing logic'},
+                {'id': 'func2', 'resource_type': 'FunctionApp', 'name': 'Notify Function', 'rationale': 'Notification handling'},
+                {'id': 'servicebus', 'resource_type': 'ServiceBus', 'name': 'Service Bus', 'rationale': 'Async message queuing'},
+                {'id': 'logic', 'resource_type': 'LogicApp', 'name': 'Workflow', 'rationale': 'Business process automation'},
+                {'id': 'cosmos', 'resource_type': 'CosmosDB', 'name': 'Cosmos DB', 'rationale': 'NoSQL data persistence'},
             ],
             'connections': [
                 {'source': 'apim', 'target': 'func1'},
@@ -282,21 +291,21 @@ async def mcp_get_diagram_examples(
         examples['security_zero_trust'] = {
             'title': 'Zero Trust Architecture',
             'resources': [
-                {'id': 'user', 'resource_type': 'User', 'name': 'Users'},
-                {'id': 'aad', 'resource_type': 'EntraID', 'name': 'Entra ID'},
-                {'id': 'appgw', 'resource_type': 'ApplicationGateway', 'name': 'App Gateway + WAF'},
-                {'id': 'pe', 'resource_type': 'PrivateEndpoint', 'name': 'Private Endpoints'},
-                {'id': 'kv', 'resource_type': 'KeyVault', 'name': 'Key Vault'},
-                {'id': 'app', 'resource_type': 'AppService', 'name': 'App Service'},
-                {'id': 'sentinel', 'resource_type': 'Sentinel', 'name': 'Microsoft Sentinel'},
+                {'id': 'user', 'resource_type': 'User', 'name': 'Users', 'rationale': 'End users accessing applications'},
+                {'id': 'aad', 'resource_type': 'EntraID', 'name': 'Entra ID', 'rationale': 'Identity and access management'},
+                {'id': 'appgw', 'resource_type': 'ApplicationGateway', 'name': 'App Gateway + WAF', 'rationale': 'Web application firewall protection'},
+                {'id': 'pe', 'resource_type': 'PrivateEndpoint', 'name': 'Private Endpoints', 'rationale': 'Private network connectivity'},
+                {'id': 'kv', 'resource_type': 'KeyVault', 'name': 'Key Vault', 'rationale': 'Secrets management'},
+                {'id': 'app', 'resource_type': 'AppService', 'name': 'App Service', 'rationale': 'Application hosting'},
+                {'id': 'sentinel', 'resource_type': 'Sentinel', 'name': 'Microsoft Sentinel', 'rationale': 'SIEM and security monitoring'},
             ],
             'connections': [
                 {'source': 'user', 'target': 'aad', 'label': 'Authenticate'},
                 {'source': 'aad', 'target': 'appgw'},
                 {'source': 'appgw', 'target': 'app'},
                 {'source': 'app', 'target': 'pe'},
-                {'source': 'app', 'target': 'kv', 'style': 'dashed'},
-                {'source': 'app', 'target': 'sentinel', 'label': 'Logs', 'style': 'dotted'},
+                {'source': 'app', 'target': 'kv'},
+                {'source': 'app', 'target': 'sentinel', 'label': 'Logs'},
             ],
         }
     
