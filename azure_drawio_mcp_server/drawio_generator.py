@@ -46,11 +46,12 @@ CANVAS_WIDTH = A4_WIDTH - (PAGE_MARGIN * 2)   # ~1043px
 CANVAS_HEIGHT = A4_HEIGHT - (PAGE_MARGIN * 2)  # ~714px
 
 # Grid layout constants - sized to fit icons (40px) + labels with comfortable spacing
-ICON_CELL_WIDTH = 85    # Width per icon cell (40px icon + good spacing)
-ICON_CELL_HEIGHT = 75   # Height per icon cell (40px icon + 35px for label)
-GROUP_INTERNAL_PAD = 20 # Padding inside groups around icons
+# Generous horizontal spacing to leave room for connection labels
+ICON_CELL_WIDTH = 110   # Width per icon cell (40px icon + room for edge labels)
+ICON_CELL_HEIGHT = 85   # Height per icon cell (40px icon + 45px for label)
+GROUP_INTERNAL_PAD = 25 # Padding inside groups around icons
 GROUP_TITLE_HEIGHT = 24 # Height for group title bar
-GROUP_GAP = 20          # Gap between groups
+GROUP_GAP = 30          # Gap between groups (room for inter-group connections)
 START_X = PAGE_MARGIN
 START_Y = PAGE_MARGIN
 
@@ -412,6 +413,117 @@ def _resolve_workspace_path(requested_path: str) -> Optional[str]:
     return None
 
 
+def validate_diagram_request(request: DiagramRequest) -> Dict[str, List[str]]:
+    """
+    Validate a diagram request and provide guidance for better results.
+    
+    Returns a dict with 'errors', 'warnings', and 'tips' lists.
+    Errors must be fixed. Warnings are recommendations. Tips are optional improvements.
+    """
+    result = {
+        'errors': [],
+        'warnings': [],
+        'tips': [],
+    }
+    
+    # Check for empty resources
+    if not request.resources:
+        result['errors'].append(
+            "No resources specified. Add at least one AzureResource with id, name, and resource_type."
+        )
+        return result
+    
+    # Check resource types for valid icons
+    from azure_drawio_mcp_server.azure_shapes import AZURE_SHAPES, RESOURCE_TYPE_ALIASES
+    
+    unknown_types = []
+    for res in request.resources:
+        resolved = RESOURCE_TYPE_ALIASES.get(res.resource_type, res.resource_type)
+        if resolved not in AZURE_SHAPES:
+            unknown_types.append(f"{res.name} ({res.resource_type})")
+    
+    if unknown_types:
+        result['warnings'].append(
+            f"Unknown resource types will show as gray boxes: {', '.join(unknown_types[:5])}"
+            + (f" and {len(unknown_types) - 5} more" if len(unknown_types) > 5 else "")
+            + ". Use common aliases like 'SQL', 'Cosmos', 'AKS', 'Functions', 'WebApp', etc."
+        )
+    
+    # Check for groups
+    if not request.groups:
+        result['tips'].append(
+            "Consider adding groups to organize resources visually. "
+            "Groups help structure the diagram and make it easier to understand."
+        )
+    else:
+        # Check for resources without groups
+        grouped_resources = {r.id for r in request.resources if r.group}
+        ungrouped = [r.name for r in request.resources if r.id not in grouped_resources]
+        if ungrouped and len(ungrouped) > len(request.resources) / 2:
+            result['warnings'].append(
+                f"Most resources are ungrouped. Assign resources to groups using the 'group' field."
+            )
+    
+    # Check for connections
+    if not request.connections:
+        result['tips'].append(
+            "No connections defined. Add connections to show data flow between resources. "
+            "Connections also help with automatic layout ordering."
+        )
+    else:
+        # Check for orphan resources (no connections)
+        connected_ids = set()
+        for conn in request.connections:
+            connected_ids.add(conn.source)
+            connected_ids.add(conn.target)
+        
+        orphans = [r.name for r in request.resources if r.id not in connected_ids]
+        if orphans:
+            result['tips'].append(
+                f"Some resources have no connections: {', '.join(orphans[:3])}"
+                + (f" and {len(orphans) - 3} more" if len(orphans) > 3 else "")
+            )
+    
+    # Check for duplicate IDs
+    ids = [r.id for r in request.resources]
+    duplicates = [id for id in ids if ids.count(id) > 1]
+    if duplicates:
+        result['errors'].append(
+            f"Duplicate resource IDs found: {', '.join(set(duplicates))}. Each resource must have a unique id."
+        )
+    
+    # Provide helpful tips based on resource count
+    if len(request.resources) > 15:
+        result['tips'].append(
+            f"Large diagram with {len(request.resources)} resources. "
+            "Consider breaking into multiple diagrams or using groups effectively."
+        )
+    
+    return result
+
+
+def format_validation_message(validation: Dict[str, List[str]]) -> str:
+    """Format validation results as a user-friendly message."""
+    lines = []
+    
+    if validation['errors']:
+        lines.append("❌ **Errors (must fix):**")
+        for err in validation['errors']:
+            lines.append(f"   • {err}")
+    
+    if validation['warnings']:
+        lines.append("⚠️ **Warnings:**")
+        for warn in validation['warnings']:
+            lines.append(f"   • {warn}")
+    
+    if validation['tips']:
+        lines.append("💡 **Tips for better diagrams:**")
+        for tip in validation['tips']:
+            lines.append(f"   • {tip}")
+    
+    return "\n".join(lines)
+
+
 async def generate_drawio_diagram(
     request: DiagramRequest,
 ) -> DiagramResponse:
@@ -424,6 +536,22 @@ async def generate_drawio_diagram(
     - draw.io web application
     """
     try:
+        # Validate request and provide guidance
+        validation = validate_diagram_request(request)
+        
+        # If there are errors, return early with guidance
+        if validation['errors']:
+            error_msg = format_validation_message(validation)
+            return DiagramResponse(
+                status='error',
+                message=f"Validation failed:\n{error_msg}",
+            )
+        
+        # Log warnings and tips for user awareness
+        if validation['warnings'] or validation['tips']:
+            guidance = format_validation_message(validation)
+            logger.info(f"Diagram generation guidance:\n{guidance}")
+        
         # Determine output path and filename
         output_dir, filename = _determine_output_path(
             request.workspace_dir,
@@ -444,6 +572,27 @@ async def generate_drawio_diagram(
         page.width = A4_WIDTH   # 1123px (297mm)
         page.height = A4_HEIGHT  # 794px (210mm)
         
+        # Add instruction text at top of diagram if enabled
+        instructions_height = 0
+        if getattr(request, 'show_instructions', True):
+            instructions_text = (
+                "<i>This is your generated Azure architecture diagram. "
+                "Resources are organized in groups that can be moved and resized. "
+                "Drag icons to reposition them — connections will auto-route. "
+                "Double-click connections to add labels. "
+                "Layout is optimized for A4 landscape.</i>"
+            )
+            instructions_obj = drawpyo_objects.Object(page=page)
+            instructions_obj.value = instructions_text
+            instructions_obj.position = (PAGE_MARGIN, 10)
+            instructions_obj.width = CANVAS_WIDTH
+            instructions_obj.height = 30
+            instructions_obj.apply_style_string(
+                "text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;"
+                "rounded=0;fontSize=10;fontColor=#666666;strokeColor=none;fillColor=none;"
+            )
+            instructions_height = 35  # Add spacing below instructions
+        
         # Calculate layout for all resources and groups
         # Uses topology-aware ordering when connections are provided
         positions, group_bounds = _calculate_layout(
@@ -451,6 +600,14 @@ async def generate_drawio_diagram(
             request.groups,
             request.connections,  # Enable topology-aware layout
         )
+        
+        # Offset all positions by instructions height
+        if instructions_height > 0:
+            # Offset group bounds
+            group_bounds = {
+                gid: (x, y + instructions_height, w, h) 
+                for gid, (x, y, w, h) in group_bounds.items()
+            }
         
         # Track created objects for edge connections
         objects: Dict[str, drawpyo_objects.Object] = {}
@@ -480,6 +637,9 @@ async def generate_drawio_diagram(
         # Build resource index map for numbering (matches legend order)
         resource_index = {res.id: idx + 1 for idx, res in enumerate(request.resources)}
         
+        # Import alias resolver to check if resource type has an icon
+        from azure_drawio_mcp_server.azure_shapes import RESOURCE_TYPE_ALIASES
+        
         # Create resource shapes - nest inside groups when applicable
         for resource in request.resources:
             display_name, category, style = get_shape_info(resource.resource_type)
@@ -495,28 +655,29 @@ async def generate_drawio_diagram(
             # Get the resource number for labeling
             res_num = resource_index.get(resource.id, 0)
             
-            # Check if this resource type uses an icon (has an icon path)
+            # Check if this resource type uses an icon (resolve aliases first)
+            resolved_type = RESOURCE_TYPE_ALIASES.get(resource.resource_type, resource.resource_type)
             has_icon = (
-                resource.resource_type in AZURE_SHAPES 
-                and AZURE_SHAPES[resource.resource_type][2] is not None
+                resolved_type in AZURE_SHAPES 
+                and AZURE_SHAPES[resolved_type][2] is not None
             )
             
             # Show numbers if explicitly requested OR if legend is shown (for cross-reference)
             show_numbers = request.show_resource_numbers or request.show_legend
             
             if has_icon:
-                # For icons, show number and name below the icon (if numbering enabled)
+                # For icons, show ONLY the number and user's name - clean and simple
                 if show_numbers:
-                    obj.value = f"<b style='color:#0078D4;'>[{res_num}]</b> {resource.name}"
+                    obj.value = f"[{res_num}] {resource.name}"
                 else:
                     obj.value = resource.name
                 # Set width and height directly (size tuple setter doesn't work in drawpyo)
                 obj.width = ICON_SIZE
                 obj.height = ICON_SIZE
             else:
-                # For fallback shapes, show number, name and type inside
+                # For fallback shapes (gray box), show name and type so user knows what it is
                 if show_numbers:
-                    obj.value = f"<b>[{res_num}]</b> {resource.name}\n({display_name})"
+                    obj.value = f"[{res_num}] {resource.name}\n({display_name})"
                 else:
                     obj.value = f"{resource.name}\n({display_name})"
                 obj.width = DEFAULT_WIDTH
@@ -703,6 +864,11 @@ async def generate_drawio_diagram(
                         "hediet.vscode-drawio extension is installed."
                     )
             
+            # Build success message with any guidance
+            guidance_msg = ""
+            if validation['warnings'] or validation['tips']:
+                guidance_msg = "\n\n" + format_validation_message(validation)
+            
             return DiagramResponse(
                 status='success',
                 path=output_path,
@@ -710,6 +876,7 @@ async def generate_drawio_diagram(
                     f"Draw.io diagram generated successfully at {output_path}{open_msg}\n"
                     f"Open with VS Code Draw.io extension (hediet.vscode-drawio) "
                     f"or draw.io application to view and edit."
+                    f"{guidance_msg}"
                 ),
                 opened_in_vscode=opened,
             )
