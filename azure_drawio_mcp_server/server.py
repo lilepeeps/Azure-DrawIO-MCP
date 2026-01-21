@@ -101,6 +101,14 @@ async def mcp_generate_diagram(
         False,
         description='Open the diagram in VS Code after generation (requires hediet.vscode-drawio extension)'
     ),
+    show_legend: bool = Field(
+        True,
+        description='Show a numbered legend table at the bottom of the diagram'
+    ),
+    use_infinite_canvas: bool = Field(
+        False,
+        description='Use infinite canvas instead of fixed A4 page. Better for complex diagrams and web docs - no visible page boundaries'
+    ),
 ) -> DiagramResponse:
     """Generate an editable Draw.io diagram for Azure architecture.
     
@@ -120,6 +128,8 @@ async def mcp_generate_diagram(
         workspace_dir=workspace_dir,
         filename=filename,
         open_in_vscode=open_in_vscode,
+        show_legend=show_legend,
+        use_infinite_canvas=use_infinite_canvas,
     )
     
     return await generate_drawio_diagram(request)
