@@ -58,6 +58,7 @@ class DiagramRequest(BaseModel):
     show_instructions: bool = Field(True, description='Show instruction text at top of diagram explaining how to edit')
     show_resource_numbers: bool = Field(False, description='Show numbered labels [1], [2] etc. on resources (disable for cleaner look)')
     use_nested_groups: bool = Field(False, description='Enable nested group containers (App Service Plan containing Web App, etc.)')
+    use_infinite_canvas: bool = Field(False, description='Use infinite canvas (page=0) instead of fixed A4 size. Better for web docs, no visible page boundaries.')
 
 
 class DiagramResponse(BaseModel):

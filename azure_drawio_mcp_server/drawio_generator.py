@@ -32,6 +32,10 @@ from azure_drawio_mcp_server.azure_shapes import (
 from azure_drawio_mcp_server.topology_layout import (
     calculate_topology_layout,
 )
+from azure_drawio_mcp_server.validator import (
+    validate_drawio_file,
+    format_validation_result,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +76,28 @@ LEGEND_ROW_ALT_STYLE = (
     "spacingLeft=10;spacingRight=10;overflow=hidden;points=[[0,0.5],[1,0.5]];"
     "portConstraint=eastwest;rotatable=0;whiteSpace=wrap;html=1;fontSize=11;"
 )
+
+# XML declaration - required per drawio-ninja research for reliable file opening
+XML_DECLARATION = '<?xml version="1.0" encoding="UTF-8"?>\n'
+
+
+def _ensure_xml_declaration(file_path: str) -> None:
+    """
+    Ensure the file starts with XML declaration.
+    
+    Based on drawio-ninja research: Files missing XML declaration may fail
+    to open reliably in some Draw.io clients.
+    """
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        if not content.strip().startswith('<?xml'):
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(XML_DECLARATION + content)
+            logger.debug(f"Added XML declaration to {file_path}")
+    except Exception as e:
+        logger.warning(f"Could not add XML declaration: {e}")
 
 
 def _open_in_vscode(file_path: str) -> bool:
@@ -568,19 +594,30 @@ async def generate_drawio_diagram(
         
         page = drawpyo.Page(file=file)
         page.name = request.title
-        # Set page to A4 landscape orientation
+        
+        # Configure page mode based on request
+        if request.use_infinite_canvas:
+            # Infinite canvas (page=0): Better for web docs, no visible page boundaries
+            page.page_num = 0
+            # Still set dimensions for layout calculations but they won't show as boundaries
+        else:
+            # Fixed A4 landscape (page=1): Good for printing, shows page boundaries
+            page.page_num = 1
+        
+        # Set page to A4 landscape orientation for layout calculations
         page.width = A4_WIDTH   # 1123px (297mm)
         page.height = A4_HEIGHT  # 794px (210mm)
         
         # Add instruction text at top of diagram if enabled
         instructions_height = 0
         if getattr(request, 'show_instructions', True):
+            canvas_mode = "infinite canvas" if request.use_infinite_canvas else "A4 landscape"
             instructions_text = (
                 "<i>This is your generated Azure architecture diagram. "
                 "Resources are organized in groups that can be moved and resized. "
                 "Drag icons to reposition them — connections will auto-route. "
                 "Double-click connections to add labels. "
-                "Layout is optimized for A4 landscape.</i>"
+                f"Layout: {canvas_mode}.</i>"
             )
             instructions_obj = drawpyo_objects.Object(page=page)
             instructions_obj.value = instructions_text
@@ -857,10 +894,22 @@ async def generate_drawio_diagram(
         # Write the file
         file.write()
         
-        # Verify file was created
+        # Ensure XML declaration is present (drawpyo doesn't add it by default)
+        # Based on drawio-ninja research, this is required for reliable file opening
+        _ensure_xml_declaration(output_path)
+        
+        # Verify file was created and validate structure
         if os.path.exists(output_path):
             opened = False
             open_msg = ""
+            
+            # Validate the generated diagram structure
+            is_valid, val_errors, val_warnings = validate_drawio_file(output_path)
+            validation_msg = ""
+            if val_errors or val_warnings:
+                validation_msg = "\n\n📋 **Diagram Validation:**\n" + format_validation_result(
+                    val_errors, val_warnings
+                )
             
             # Open in VS Code if requested
             if request.open_in_vscode:
@@ -886,7 +935,7 @@ async def generate_drawio_diagram(
                     f"Draw.io diagram generated successfully at {output_path}{open_msg}\n"
                     f"Open with VS Code Draw.io extension (hediet.vscode-drawio) "
                     f"or draw.io application to view and edit."
-                    f"{guidance_msg}"
+                    f"{guidance_msg}{validation_msg}"
                 ),
                 opened_in_vscode=opened,
             )
