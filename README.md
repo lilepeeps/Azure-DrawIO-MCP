@@ -475,6 +475,9 @@ Creates a Draw.io diagram from a structured specification.
 - `filename`: Output filename (without .drawio extension)
 - `open_in_vscode`: Open the diagram in VS Code after generation (default: false)
 - `show_legend`: Show a numbered legend table at the bottom (default: true)
+- `use_infinite_canvas`: Use infinite canvas instead of fixed A4 page (default: false)
+  - When `true`: Creates an expandable canvas that grows with content (recommended for complex diagrams)
+  - When `false`: Uses fixed A4 landscape page for consistent printing/export
 
 **Example:**
 ```json
@@ -572,6 +575,8 @@ Private Endpoints, and Microsoft Sentinel for monitoring
 ```
 azure-drawio-mcp/
 ├── .github/
+│   ├── instructions/
+│   │   └── drawio.instructions.md   # Best practices for diagram specifications
 │   └── prompts/
 │       └── generate-architecture.prompt.md  # Prompt for codebase scanning
 ├── azure_drawio_mcp_server/
@@ -580,6 +585,7 @@ azure-drawio-mcp/
 │   ├── drawio_generator.py   # Creates .drawio files using drawpyo library
 │   ├── azure_shapes.py       # Azure resource type mappings and styles
 │   ├── scanner.py            # Workspace scanner (optional)
+│   ├── validator.py          # Draw.io file validation module
 │   └── models.py             # Data models for requests/responses
 ├── diagrams/                 # Generated diagram output directory
 ├── .dockerignore             # Docker build exclusions
@@ -588,6 +594,29 @@ azure-drawio-mcp/
 ├── requirements.txt          # Python dependencies (pip)
 ├── README.md                 # This file
 └── LICENSE                   # MIT License
+```
+
+---
+
+## Validation
+
+Generated diagrams are automatically validated to ensure they can be opened in Draw.io without errors.
+
+The validation checks for:
+- **XML Declaration**: Proper `<?xml version="1.0" encoding="UTF-8"?>` header
+- **Root Structure**: Required root cells with `id="0"` and `id="1"`
+- **Unique IDs**: No duplicate cell IDs
+- **Parent References**: All parent references point to existing cells
+- **Edge Integrity**: Source and target references on connections are valid
+- **Geometry**: Proper placement and sizing attributes
+
+You can also validate existing diagrams programmatically:
+
+```python
+from azure_drawio_mcp_server import validate_drawio_file, format_validation_result
+
+result = validate_drawio_file("path/to/diagram.drawio")
+print(format_validation_result(result))
 ```
 
 ## Dependencies
@@ -623,4 +652,5 @@ MIT License - See [LICENSE](LICENSE) file.
 
 - **Original Inspiration**: [dminkovski/azure-diagram-mcp](https://github.com/dminkovski/azure-diagram-mcp) - PNG diagram generation using the diagrams package
 - **Draw.io Generation**: [MerrimanInd/drawpyo](https://github.com/MerrimanInd/drawpyo) - Python library for creating Draw.io files
+- **Validation Patterns**: [drawio-ninja](https://github.com/simonholdsworth/drawio-ninja) - Best practices for reliable Draw.io XML generation
 - **VS Code Integration**: [hediet.vscode-drawio](https://marketplace.visualstudio.com/items?itemName=hediet.vscode-drawio) - Draw.io editor for VS Code

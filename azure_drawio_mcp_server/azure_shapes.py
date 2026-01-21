@@ -901,7 +901,8 @@ RESOURCE_TYPE_ALIASES: Dict[str, str] = {
     'DNS': 'AzureDns',
     'DNSZone': 'DNSZone',
     'WAF': 'WebApplicationFirewallPoliciesWAF',
-    'Firewall': 'AzureFirewall',
+    'Firewall': 'Firewall',
+    'AzureFirewall': 'Firewall',
     'VNet': 'VirtualNetwork',
     'VNET': 'VirtualNetwork',
     'VirtualNetwork': 'VirtualNetwork',
@@ -949,7 +950,8 @@ RESOURCE_TYPE_ALIASES: Dict[str, str] = {
     'Vault': 'KeyVault',
     'Defender': 'MicrosoftDefenderForCloud',
     'SecurityCenter': 'MicrosoftDefenderForCloud',
-    'Sentinel': 'Sentinel',
+    'Sentinel': 'AzureSentinel',
+    'MicrosoftSentinel': 'AzureSentinel',
     
     # DevOps aliases
     'DevOps': 'AzureDevOps',

@@ -3,5 +3,13 @@
         {
             "path": "."
         }
-    ]
+    ],
+    "settings": {
+        "chat.tools.terminal.autoApprove": {
+            "/^cd \"c:\\\\Users\\\\peter\\\\Azure Diagrams\\\\azure-drawio-mcp\" ; python -c \"import drawpyo; f = drawpyo\\.File\\(\\); p = drawpyo\\.Page\\(file=f\\); p\\.width=100; p\\.height=100; print\\(p\\.mxGraph\\)\"$/": {
+                "approve": true,
+                "matchCommandLine": true
+            }
+        }
+    }
 }
